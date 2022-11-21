@@ -1,53 +1,38 @@
 #!/usr/bin/env python3
-import fire
-import pathlib
-from pathlib import Path
 
+import fire
+from pathlib import Path
 import nltk
-nltk.download('punkt')
 
 from build_coha_corpus import build_train_test, build_data_sets
 
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--input_folders', type=str,
-    #                     help='Path to COHA folders containing articles for each temporal slice separated by ";".',
-    #                     default='data/coha/COHA_1960;data/coha/COHA_1990')
-    # parser.add_argument('--output_files', type=str, help='Path to output files containing text for each'
-    #                                                        'temporal slice separated by ";". Should correspond'
-    #                                                        'to the number and order of input folders.',
-    #                     default='data/coha/coha_1960.txt;data/coha/coha_1990.txt')
-    # parser.add_argument('--lm_output_train', type=str,
-    #                     help='Path to output .txt file used for language model training',
-    #                     default='data/coha/train.txt')
-    # parser.add_argument('--lm_output_test', type=str,
-    #                     help='Path to output .txt file used for language model validation',
-    #                     default='data/coha/test.txt')
-    # args = parser.parse_args()
+def build_coha_corpus(dirpaths_for_input_slices:list, data_root_dir='./data/'):
+    '''Wrapper alternative to simplify the argparse version in the original build_coha_corpus.py.
 
-    # input_folders = args.input_folders.split(';')
-    # output_files = args.output_files.split(';')
+    Invoke like so: python3 g5_build_coha_corpus.py '["data/coha/coha_1883","data/coha/coha_1908"]'
 
-    # build_train_test(input_folders, args.lm_output_train, args.lm_output_test)
-    # build_data_sets(input_folders, output_files)
+    (mind the extra pair of quotes, which may be necessary according to your version of python, fire, shell, etc.)
+    '''
 
-def build_coha_corpus(dirpaths_for_input_slices:list):
+    if __name__ == '__main__':
+        nltk.download('punkt')
 
-    data_root_dir = Path('./data/')
-    output_dir = data_root_dir / Path('outputs')
+    data_root_dir = Path(data_root_dir)
+    output_dir = data_root_dir / Path('outputs') # TBD: make this work if outputs dir does not exist yet
 
-    input_folders = [ Path(str(dirpath)) for dirpath in dirpaths_for_input_slices ]
+    input_folders = [ Path(dirpath) for dirpath in dirpaths_for_input_slices ]
     output_files = [ output_dir / Path(str(Path(dirpath).stem) + '.txt') for dirpath in dirpaths_for_input_slices ]
 
-    lm_output_train = output_dir / Path('train.txt')
-    lm_output_test = output_dir / Path('test.txt')
+    lm_output_train = output_dir / Path('coha.train.txt')
+    lm_output_test = output_dir / Path('coha.test.txt')
 
-
+    print('\nWorking with the following paths...')
     for e in [dirpaths_for_input_slices, input_folders, output_files, lm_output_train, lm_output_test]:
         print(e)
-    # build_train_test(input_folders, lm_output_train, lm_output_test)
-    # build_data_sets(input_folders, output_files)
 
-def do_build_coha_corpus(): pass
+    print('\nOk, making changes to filesystem...')
+    build_train_test(input_folders, lm_output_train, lm_output_test)
+    build_data_sets(input_folders, output_files)
 
 if __name__ == '__main__':
     fire.Fire(build_coha_corpus)
