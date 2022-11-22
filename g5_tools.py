@@ -42,7 +42,7 @@ class coha(object):
         python g5_tools.py coha build_corpus '["data/coha/coha_1880s","data/coha/coha_1900s"]'
 
         or:
-        python3 g5_build_coha_corpus.py '["data/coha/coha_1883","data/coha/coha_1908"]'
+        python g5_tools.py coha build_corpus '["data/coha/coha_1883","data/coha/coha_1908"]'
 
         (mind the extra pair of quotes, which may be necessary according to your version of python, fire, shell, etc.)
         '''
