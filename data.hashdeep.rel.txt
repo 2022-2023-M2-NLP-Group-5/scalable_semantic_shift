@@ -3,8 +3,8 @@
 ## Invoked from: /home/user/projlogiciel/scalable_semantic_shift
 ## $ hashdeep -revv -l data/
 ## 
-677777,bef1ba827a2a167b90530d84fefcd4b3,87c1fbda5edc33a24ae22e6a873c5114eac512b32acefe363c4cbf919e1a4f68,data/coha/coha_1908/fic_1908_1150.txt
 561476,1a22168a08a88b75210c7ae5a3cd5096,1932e0b8f0f79ea0730c5b4bfb7f835598713e2ecacc44d6ead4b28907b78157,data/coha/coha_1883/fic_1883_2450.txt
+677777,bef1ba827a2a167b90530d84fefcd4b3,87c1fbda5edc33a24ae22e6a873c5114eac512b32acefe363c4cbf919e1a4f68,data/coha/coha_1908/fic_1908_1150.txt
 995526,d9d865138d17f1958502ed060ecfeeb6,fe0fda7c425b48c516fc8f160d594c8022a0808447475c1a7c6d6479763f310c,data/multi_cased_L-12_H-768_A-12/vocab.txt
 8631,c16c6c99adfa49bcdb87a8b8d5a7e0a6,7d8509c2a62b4e300feb55f8e5f1eef41638f4998dd4d887736f42d4f6a34b37,data/multi_cased_L-12_H-768_A-12/bert_model.ckpt.index
 908833,d1aa75bb6ff50dfa7ee70e7e1bbc5e4c,95e5f1997e8831f1c31e5cf530f1a2e99f121e9cd20887f2dce6fe9e3343e3fa,data/multi_cased_L-12_H-768_A-12/bert_model.ckpt.meta
