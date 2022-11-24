@@ -85,6 +85,8 @@ class coha(object):
         print('\nOk, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
         for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
+            lm_output_train.parent.mkdir(exist_ok=True, parents=True)
+            lm_output_test.parent.mkdir(exist_ok=True)
             build_train_test([infolder], lm_output_train, lm_output_test)
         # build_data_sets(input_folders, output_files) # this function outputs json files, which we have no use for
 
