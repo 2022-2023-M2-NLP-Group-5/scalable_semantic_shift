@@ -17,7 +17,8 @@ def _download_file_maybe(url:str, out_file_path=None):
     if out_file_path.is_file():
         print('Not downloading because there is already a file at: {} ({})'.format(out_file_path, out_file_path.absolute()))
     else:
-        command = sarge.shell_format('wget {}', url)
+        # https://stackoverflow.com/questions/1078524/how-to-specify-the-download-location-with-wget
+        command = sarge.shell_format('wget -O {} {} ', out_file_path, url)
         sarge.run(command)
 
 def setup_punkt():
@@ -93,16 +94,26 @@ class bert(object):
     def download_model(url = 'https://storage.googleapis.com/bert_models/2018_11_23/multi_cased_L-12_H-768_A-12.zip'):
         _download_file_maybe(url)
 
+    @staticmethod
     def train():
         """
 
         CLI invocation as explained in the main README:
         python fine-tune_BERT.py --train_data_file pathToLMTrainSet --output_dir pathToOutputModelDir --eval_data_file pathToLMTestSet --model_name_or_path modelForSpecificLanguage --mlm --do_train --do_eval --evaluate_during_training
         """
-        pathToLMTrainSet = ''
-        pathToOutputModelDir = ''
-        pathToLMTestSet = ''
-        modelForSpecificLanguage = ''
+
+        """╰─λ ls -lah ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/                                                  
+total 684M
+drwxr-xr-x 2 user user 4.0K Nov 24 22:24 ./
+drwxr-xr-x 6 user user 4.0K Nov 24 21:54 ../
+-rw-r--r-- 1 user user  521 Nov 24  2018 bert_config.json
+-rw-r--r-- 1 user user 682M Nov 24  2018 bert_model.ckpt.data-00000-of-00001
+-rw-r--r-- 1 user user 8.5K Nov 24  2018 bert_model.ckpt.index
+-rw-r--r-- 1 user user 888K Nov 24  2018 bert_model.ckpt.meta
+lrwxrwxrwx 1 user user   97 Nov 24 22:18 config.json -> /home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json
+lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_model.ckpt.index
+-rw-r--r-- 1 user user 973K Nov 24  2018 vocab.txt
+"""
 
         command = '''python fine-tune_BERT.py \
         --train_data_file {pathToLMTrainSet} \
@@ -110,8 +121,33 @@ class bert(object):
         --eval_data_file {pathToLMTestSet} \
         --model_name_or_path {modelForSpecificLanguage} \
         --mlm --do_train --do_eval --evaluate_during_training
+
         '''
-        sarge.shell_format(command, )
+        # --config_name {pathToCfg}
+
+        cmd = sarge.shell_format(command,
+                                 pathToLMTrainSet = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
+                                 pathToOutputModelDir = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
+                                 pathToLMTestSet = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
+
+                                 # this works, it will download it from internet
+                                 modelForSpecificLanguage = 'bert-base-multilingual-cased'
+
+                                 # Here are other various notes from when i tried to make it work via loading a local, previously-downloaded model...
+
+                                 # NOTE: '~' did not seem to work, absolute path needed
+                                 # modelForSpecificLanguage = '/home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_model.ckpt.data-00000-of-00001',
+
+                                 # pathToCfg = '/home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json',
+        )
+
+
+        # Also tried (with partial success):
+        # ln -s ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/config.json
+
+        sarge.run(cmd)
+
+
 
 if __name__ == '__main__':
     fire.Fire()

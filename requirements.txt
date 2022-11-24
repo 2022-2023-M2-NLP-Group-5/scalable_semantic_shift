@@ -14,3 +14,4 @@ lemmagen3
 matplotlib
 fire
 sarge
+tensorboard
