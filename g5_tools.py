@@ -60,19 +60,21 @@ class coha(object):
         output_dir = data_root_dir / Path('outputs')
 
         input_folders = [ Path(dirpath) for dirpath in dirpaths_for_input_slices ]
-        output_files = [ output_dir / Path(str(Path(dirpath).name) + '.txt') for dirpath in dirpaths_for_input_slices ]
 
-        lm_output_train = output_dir / Path('coha.train.txt')
-        lm_output_test = output_dir / Path('coha.test.txt')
+        corpus_slice_labels = [ str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices ]
+
+        paths_for_lm_output_train = [ output_dir / Path('coha.' + l + '.train.txt') for l in corpus_slice_labels ]
+        paths_for_lm_output_test =  [ output_dir / Path('coha.' + l + '.test.txt') for l in corpus_slice_labels ]
 
         print('\nWorking with the following paths...')
-        for e in [dirpaths_for_input_slices, input_folders, output_files, lm_output_train, lm_output_test]:
+        for e in [dirpaths_for_input_slices, input_folders, paths_for_lm_output_train, paths_for_lm_output_test]:
             print(e)
 
         print('\nOk, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
-        build_train_test(input_folders, lm_output_train, lm_output_test)
-        build_data_sets(input_folders, output_files)
+        for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
+            build_train_test([infolder], lm_output_train, lm_output_test)
+        # build_data_sets(input_folders, output_files) # this function outputs json files, which we have no use for
 
 if __name__ == '__main__':
     fire.Fire()
