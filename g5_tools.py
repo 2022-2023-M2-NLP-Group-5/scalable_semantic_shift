@@ -10,6 +10,16 @@ from build_coha_corpus import build_train_test, build_data_sets
 
 DEFAULT_DATA_ROOT_DIR='data/'
 
+def _download_file_maybe(url:str, out_file_path=None):
+    if out_file_path is None:
+        out_file_path = Path(DEFAULT_DATA_ROOT_DIR) / Path(Path(url).name)
+
+    if out_file_path.is_file():
+        print('Not downloading because there is already a file at: {} ({})'.format(out_file_path, out_file_path.absolute()))
+    else:
+        command = sarge.shell_format('wget {}', url)
+        sarge.run(command)
+
 def setup_punkt():
     '''Punkt tokenizer is used by the COHA preprocessing code (build_corpus...)'''
     import nltk
@@ -75,6 +85,33 @@ class coha(object):
         for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
             build_train_test([infolder], lm_output_train, lm_output_test)
         # build_data_sets(input_folders, output_files) # this function outputs json files, which we have no use for
+
+
+class bert(object):
+
+    @staticmethod
+    def download_model(url = 'https://storage.googleapis.com/bert_models/2018_11_23/multi_cased_L-12_H-768_A-12.zip'):
+        _download_file_maybe(url)
+
+    def train():
+        """
+
+        CLI invocation as explained in the main README:
+        python fine-tune_BERT.py --train_data_file pathToLMTrainSet --output_dir pathToOutputModelDir --eval_data_file pathToLMTestSet --model_name_or_path modelForSpecificLanguage --mlm --do_train --do_eval --evaluate_during_training
+        """
+        pathToLMTrainSet = ''
+        pathToOutputModelDir = ''
+        pathToLMTestSet = ''
+        modelForSpecificLanguage = ''
+
+        command = '''python fine-tune_BERT.py \
+        --train_data_file {pathToLMTrainSet} \
+        --output_dir {pathToOutputModelDir} \
+        --eval_data_file {pathToLMTestSet} \
+        --model_name_or_path {modelForSpecificLanguage} \
+        --mlm --do_train --do_eval --evaluate_during_training
+        '''
+        sarge.shell_format(command, )
 
 if __name__ == '__main__':
     fire.Fire()
