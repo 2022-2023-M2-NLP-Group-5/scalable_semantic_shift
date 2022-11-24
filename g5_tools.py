@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from os import PathLike
 from pathlib import Path
 import pathlib
 
@@ -74,8 +75,8 @@ class coha(object):
 
         corpus_slice_labels = [ str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices ]
 
-        paths_for_lm_output_train = [ output_dir / Path('coha.' + l + '.train.txt') for l in corpus_slice_labels ]
-        paths_for_lm_output_test =  [ output_dir / Path('coha.' + l + '.test.txt') for l in corpus_slice_labels ]
+        paths_for_lm_output_train = [ output_dir / Path(l) / Path('train.txt') for l in corpus_slice_labels ]
+        paths_for_lm_output_test =  [ output_dir / Path(l) / Path('test.txt') for l in corpus_slice_labels ]
 
         print('\nWorking with the following paths...')
         for e in [dirpaths_for_input_slices, input_folders, paths_for_lm_output_train, paths_for_lm_output_test]:
@@ -92,10 +93,14 @@ class bert(object):
 
     @staticmethod
     def download_model(url = 'https://storage.googleapis.com/bert_models/2018_11_23/multi_cased_L-12_H-768_A-12.zip'):
+        '''NOTE: don't use this for now'''
         _download_file_maybe(url)
 
     @staticmethod
-    def train():
+    def train(train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
+              out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
+              test = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
+    ):
         """
 
         CLI invocation as explained in the main README:
@@ -126,9 +131,9 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
         # --config_name {pathToCfg}
 
         cmd = sarge.shell_format(command,
-                                 pathToLMTrainSet = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
-                                 pathToOutputModelDir = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
-                                 pathToLMTestSet = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
+                                 pathToLMTrainSet = train,
+                                 pathToOutputModelDir = out,
+                                 pathToLMTestSet = test,
 
                                  # this works, it will download it from internet
                                  modelForSpecificLanguage = 'bert-base-multilingual-cased'
