@@ -97,13 +97,27 @@ class bert(object):
         _download_file_maybe(url)
 
     @staticmethod
-    def train(train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
-              out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
-              test = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
+    def train(
+            train = 'data/outputs/coha.1910.train.txt',
+            out = 'data/outputs/bert_training/',
+            test = 'data/outputs/coha.1910.test.txt',
+
+            # train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
+            # out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
+            # test = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
     ):
         """
+        Example invocation:
 
-        CLI invocation as explained in the main README:
+        oarsub -l gpu=1 -I -q production  # and wait for it to connect
+        bash
+        conda activate ScaleSemShift
+        cd ~/s9/software-project/repo/scalable_semantic_shift
+        ./g5_tools.py bert train --train data/outputs/coha.1910.train.txt  --out data/outputs/bert_training  --test data/outputs/coha.1910.test.txt
+
+
+        Original CLI invocation that this function wraps, as explained in the main README:
+
         python fine-tune_BERT.py --train_data_file pathToLMTrainSet --output_dir pathToOutputModelDir --eval_data_file pathToLMTestSet --model_name_or_path modelForSpecificLanguage --mlm --do_train --do_eval --evaluate_during_training
         """
 
