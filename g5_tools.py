@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
 
-from os import PathLike
+import sys
 from pathlib import Path
-import pathlib
+import shutil
+import glob
 
 import fire
 import sarge
+
+# import pathlib
+# from six import class_types, reraise
+
+try:
+    from loguru import logger
+    logger.remove()
+    logger.add(sys.stderr, level='TRACE',
+               backtrace=True, diagnose=True)
+except:
+    import logging as logger
+    logger.warning('Did not find `loguru` module, defaulting to `logging`')
 
 from build_coha_corpus import build_train_test, build_data_sets
 
@@ -28,16 +41,16 @@ def setup_punkt():
     nltk.download('punkt')
 
 def _freeze_hashdeep_rel(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.rel.txt'):
-    command = ' hashdeep -revv -l "{}" > "{}" '
+    command = ' hashdeep -c sha256 -revv -l "{}" > "{}" '
     command = sarge.shell_format(command, data_dirpath, hashdeep_outfile_name)
-    print('Running command:', repr(command))
+    print(f'Running {command=}')
     sarge.run(command)
     # return p.returncode
 
 def _freeze_hashdeep_bare(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.bare.txt'):
-    command = ' hashdeep -revv -b "{}" > "{}" '
+    command = ' hashdeep -c sha256 -revv -b "{}" > "{}" '
     command = sarge.shell_format(command, data_dirpath, hashdeep_outfile_name)
-    print('Running command:', repr(command))
+    print(f'Running {command=}')
     sarge.run(command)
 
 def freeze_hashdeep(data_dirpath=DEFAULT_DATA_ROOT_DIR):
@@ -46,16 +59,75 @@ def freeze_hashdeep(data_dirpath=DEFAULT_DATA_ROOT_DIR):
 
 class coha(object):
 
+    ZIP_EXTRACTION_DEST_DIR = Path(DEFAULT_DATA_ROOT_DIR) / 'text.zip.coha.d/'
+    SLICE_EXTRACTION_DEST_DIR_ROOT = Path(DEFAULT_DATA_ROOT_DIR) / 'coha'
+
     @staticmethod
     def download_sample():
         '''example CLI invocation: python g5_tools.py coha download_sample '''
         url = 'https://www.corpusdata.org/coha/samples/text.zip'
-        out_file_path = Path(Path(url).name)
-        if out_file_path.is_file():
-            print('Not downloading because there is already a file at: {} ({})'.format(out_file_path, out_file_path.absolute()))
-        else:
-            command = sarge.shell_format('wget {}', url)
+        _download_file_maybe(url)
+
+    @classmethod
+    def _unzip_dataset(cls,
+                       exdir=None,
+                       zipfile_path = Path(DEFAULT_DATA_ROOT_DIR) / Path('text.zip')
+                       ):
+        if exdir is None: exdir = cls.ZIP_EXTRACTION_DEST_DIR
+        try:
+            exdir.mkdir(exist_ok=False, parents=True)
+        except:
+            logger.warning(f'Aborting because {exdir=} ...seems to already exist')
+            sys.exit(1)
+        command = sarge.shell_format('unzip -q -d {} {} ', exdir, zipfile_path)
+        sarge.run(command)
+
+    @classmethod
+    def clear(cls):
+        '''clear_all_except_zip. and also does not clear the output of build_corpus'''
+        for e in [cls.ZIP_EXTRACTION_DEST_DIR,
+                  cls.SLICE_EXTRACTION_DEST_DIR_ROOT]:
+            logger.info(f'Removing: {e}')
+            shutil.rmtree(e, ignore_errors=True)
+
+    @classmethod
+    def extract_one_slice(cls,
+                          slice_pattern:str='1910',
+                          ):
+        """Example equivalent operation: mv data/text.zip.coha.d/*1910*.txt data/coha/1910/"""
+        # dir where full dataset was unzipped to
+        exdir = cls.ZIP_EXTRACTION_DEST_DIR
+
+        slice_pattern = str(slice_pattern)
+        logger.trace(f'{slice_pattern=}')
+
+        # dir where we will store our extracted slices
+        slice_out_dir = cls.SLICE_EXTRACTION_DEST_DIR_ROOT / (slice_pattern + '/')
+        slice_out_dir.mkdir(parents=True)
+
+        found_matches = False
+        fpaths = exdir.glob(('*_' + slice_pattern + '_*.txt'))
+        for fpath in fpaths:
+            found_matches = True # if we found at least one match for the pattern
+            # NOTE: mv is faster than cp, but harms reproducibility/idempotency
+            command = sarge.shell_format('mv {} {}', fpath, slice_out_dir)
+            logger.info(f'{command=}')
             sarge.run(command)
+
+        if not found_matches:
+            logger.warning('No matching files')
+
+    @classmethod
+    def _extract_several_slices(cls, *slices_patterns):
+        logger.trace(f'{slices_patterns=}')
+        for patt in slices_patterns:
+            cls.extract_one_slice(slice_pattern=patt)
+
+    @classmethod
+    def extract(cls, *slices_patterns):
+        logger.trace(f'{slices_patterns=}')
+        cls._unzip_dataset()
+        cls._extract_several_slices(*slices_patterns)
 
     @staticmethod
     def build_corpus(*dirpaths_for_input_slices, data_root_dir=DEFAULT_DATA_ROOT_DIR):
@@ -99,10 +171,18 @@ class bert(object):
         _download_file_maybe(url)
 
     @staticmethod
+    def prep_coha():
+        coha.download_sample()
+        coha.clear()
+        coha.extract('1910', '1950')
+        coha.build_corpus("data/coha/1910/","data/coha/1950/")
+        coha.clear()
+
+    @staticmethod
     def train(
-            train = 'data/outputs/coha.1910.train.txt',
+            train = 'data/outputs/coha/1910/train.txt',
             out = 'data/outputs/bert_training/',
-            test = 'data/outputs/coha.1910.test.txt',
+            test = 'data/outputs/coha/1910/test.txt',
 
             # train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
             # out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
@@ -168,8 +248,9 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
 
         sarge.run(cmd)
 
-
-
-if __name__ == '__main__':
+@logger.catch
+def main():
     fire.Fire()
 
+if __name__ == '__main__':
+    main()

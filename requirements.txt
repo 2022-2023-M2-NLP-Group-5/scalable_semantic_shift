@@ -12,6 +12,9 @@ spacy==2.3.0
 nltk
 lemmagen3
 matplotlib
+
+tensorboard
+
 fire
 sarge
-tensorboard
+loguru
