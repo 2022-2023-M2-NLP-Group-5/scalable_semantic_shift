@@ -183,6 +183,7 @@ class bert(object):
             train = 'data/outputs/coha/1910/train.txt',
             out = 'data/outputs/bert_training/',
             test = 'data/outputs/coha/1910/test.txt',
+            batchSize = 6,
 
             # train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
             # out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
@@ -221,7 +222,10 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
         --output_dir {pathToOutputModelDir} \
         --eval_data_file {pathToLMTestSet} \
         --model_name_or_path {modelForSpecificLanguage} \
-        --mlm --do_train --do_eval --evaluate_during_training
+        --mlm --do_train --do_eval --evaluate_during_training \
+        --per_gpu_train_batch_size {batchSize} \
+        --per_gpu_eval_batch_size {batchSize}
+
 
         '''
         # --config_name {pathToCfg}
