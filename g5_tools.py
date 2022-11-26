@@ -12,11 +12,11 @@ git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
 git checkout devel
 
-mamba env create -f environment.yml  # 4 mins
-conda activate ScaleSemShift
+time mamba env create -f environment.yml  # 4 mins
 
-python g5_tools.py bert prep_coha
-python g5_tools.py bert train
+conda activate ScaleSemShift
+time python g5_tools.py bert prep_coha
+time python g5_tools.py bert train
 
 '''
 
@@ -201,9 +201,9 @@ class bert(object):
 
     @staticmethod
     def train(
-            train = 'data/outputs/coha/1910/train.txt',
+            train = 'data/outputs/1910/train.txt',
             out = 'data/outputs/bert_training/',
-            test = 'data/outputs/coha/1910/test.txt',
+            test = 'data/outputs/1910/test.txt',
             batchSize = 6,
 
             # train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
@@ -257,7 +257,9 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
                                  pathToLMTestSet = test,
 
                                  # this works, it will download it from internet
-                                 modelForSpecificLanguage = 'bert-base-multilingual-cased'
+                                 modelForSpecificLanguage = 'bert-base-multilingual-cased',
+
+                                 batchSize = batchSize,
 
                                  # Here are other various notes from when i tried to make it work via loading a local, previously-downloaded model...
 
