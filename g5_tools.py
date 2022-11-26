@@ -1,4 +1,24 @@
 #!/usr/bin/env python3
+'''
+Prep:
+
+#oarsub -l gpu=1 -I -q production # nancy
+oarsub -l gpu=2 -I -t exotic # grenoble, lyon
+
+wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+bash Mambaforge-$(uname)-$(uname -m).sh
+
+git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
+cd scalable_semantic_shift/
+git checkout devel
+
+mamba env create -f environment.yml  # 4 mins
+conda activate ScaleSemShift
+
+python g5_tools.py bert prep_coha
+python g5_tools.py bert train
+
+'''
 
 import sys
 from pathlib import Path
@@ -19,8 +39,6 @@ try:
 except:
     import logging as logger
     logger.warning('Did not find `loguru` module, defaulting to `logging`')
-
-from build_coha_corpus import build_train_test, build_data_sets
 
 DEFAULT_DATA_ROOT_DIR='data/'
 
@@ -139,6 +157,9 @@ class coha(object):
 
         if __name__ == '__main__':
             setup_punkt()
+
+        # this import needs punkt already downloaded in order to succeed
+        from build_coha_corpus import build_train_test, build_data_sets
 
         data_root_dir = Path(data_root_dir)
         output_dir = data_root_dir / Path('outputs')
