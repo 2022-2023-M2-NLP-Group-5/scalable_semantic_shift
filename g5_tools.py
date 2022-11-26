@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-'''
-Prep:
+'''Collection of tools for our purposes.
+
+Example prep for new node/cluster (if you're running on a cluster that is
+already set up, then you just need some of these commands):
 
 #oarsub -l gpu=1 -I -q production # nancy
 oarsub -l gpu=2 -I -t exotic # grenoble, lyon
@@ -8,15 +10,21 @@ oarsub -l gpu=2 -I -t exotic # grenoble, lyon
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
 bash Mambaforge-$(uname)-$(uname -m).sh
 
+bash # enter a new bash shell with conda/mamba available
+
 git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
 git checkout devel
 
-time mamba env create -f environment.yml  # 4 mins
+time mamba env create -f environment.yml  # 4 mins (mostly for scikit)
+
+bash
 
 conda activate ScaleSemShift
 time python g5_tools.py bert prep_coha
 time python g5_tools.py bert train
+
+# worked on neowise-3! (accessed from lyon)
 
 '''
 
@@ -28,14 +36,11 @@ import glob
 import fire
 import sarge
 
-# import pathlib
-# from six import class_types, reraise
-
 try:
     from loguru import logger
     logger.remove()
-    logger.add(sys.stderr, level='TRACE',
-               backtrace=True, diagnose=True)
+    logger.add(sys.stderr, backtrace=True, diagnose=True, level='TRACE')
+    logger.add("g5.{time}.loguru.log", retention=10, level='TRACE')
 except:
     import logging as logger
     logger.warning('Did not find `loguru` module, defaulting to `logging`')
@@ -47,7 +52,7 @@ def _download_file_maybe(url:str, out_file_path=None):
         out_file_path = Path(DEFAULT_DATA_ROOT_DIR) / Path(Path(url).name)
 
     if out_file_path.is_file():
-        print('Not downloading because there is already a file at: {} ({})'.format(out_file_path, out_file_path.absolute()))
+        logger.warning('Not downloading because there is already a file at: {} ({})'.format(out_file_path, out_file_path.absolute()))
     else:
         # https://stackoverflow.com/questions/1078524/how-to-specify-the-download-location-with-wget
         command = sarge.shell_format('wget -O {} {} ', out_file_path, url)
@@ -61,14 +66,14 @@ def setup_punkt():
 def _freeze_hashdeep_rel(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.rel.txt'):
     command = ' hashdeep -c sha256 -revv -l "{}" > "{}" '
     command = sarge.shell_format(command, data_dirpath, hashdeep_outfile_name)
-    print(f'Running {command=}')
+    logger.info(f'Running {command=}')
     sarge.run(command)
     # return p.returncode
 
 def _freeze_hashdeep_bare(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.bare.txt'):
     command = ' hashdeep -c sha256 -revv -b "{}" > "{}" '
     command = sarge.shell_format(command, data_dirpath, hashdeep_outfile_name)
-    print(f'Running {command=}')
+    logger.info(f'Running {command=}')
     sarge.run(command)
 
 def freeze_hashdeep(data_dirpath=DEFAULT_DATA_ROOT_DIR):
@@ -150,9 +155,6 @@ class coha(object):
     @staticmethod
     def build_corpus(*dirpaths_for_input_slices, data_root_dir=DEFAULT_DATA_ROOT_DIR):
         '''Wrapper alternative to simplify the argparse version in the original build_coha_corpus.py.
-
-        Invoke like so:
-        python g5_tools.py coha build_corpus "data/coha/coha_1883/"  "data/coha/coha_1908/"
         '''
 
         if __name__ == '__main__':
@@ -171,11 +173,11 @@ class coha(object):
         paths_for_lm_output_train = [ output_dir / Path(l) / Path('train.txt') for l in corpus_slice_labels ]
         paths_for_lm_output_test =  [ output_dir / Path(l) / Path('test.txt') for l in corpus_slice_labels ]
 
-        print('\nWorking with the following paths...')
+        logger.info('\nWorking with the following paths...')
         for e in [dirpaths_for_input_slices, input_folders, paths_for_lm_output_train, paths_for_lm_output_test]:
-            print(e)
+            logger.info(e)
 
-        print('\nOk, making changes to filesystem...')
+        logger.info('\nOk, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
         for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
             lm_output_train.parent.mkdir(exist_ok=True, parents=True)
@@ -188,7 +190,7 @@ class bert(object):
 
     @staticmethod
     def download_model(url = 'https://storage.googleapis.com/bert_models/2018_11_23/multi_cased_L-12_H-768_A-12.zip'):
-        '''NOTE: don't use this for now'''
+        '''NOTE: don't use this for now. Instead code is using the model that hugging face libraries will download automagically'''
         _download_file_maybe(url)
 
     @staticmethod
@@ -204,39 +206,16 @@ class bert(object):
             train = 'data/outputs/1910/train.txt',
             out = 'data/outputs/bert_training/',
             test = 'data/outputs/1910/test.txt',
-            batchSize = 6,
-
-            # train = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.train.txt',
-            # out = '~/projlogiciel/scalable_semantic_shift/data/outputs/bert_training/',
-            # test = '~/projlogiciel/scalable_semantic_shift/data/outputs/coha.coha_1883.test.txt',
+            batchSize = 7,
+            epochs = 5.0, # 5.0 is the default they use
+            # **kwargs, # TBD: figure out how to implement generic kwargs passthru
     ):
-        """
-        Example invocation:
-
-        oarsub -l gpu=1 -I -q production  # and wait for it to connect
-        bash
-        conda activate ScaleSemShift
-        cd ~/s9/software-project/repo/scalable_semantic_shift
-        ./g5_tools.py bert train --train data/outputs/coha.1910.train.txt  --out data/outputs/bert_training  --test data/outputs/coha.1910.test.txt
-
+        """Wraps `fine-tune_BERT.py` in order to run a test training.
 
         Original CLI invocation that this function wraps, as explained in the main README:
 
         python fine-tune_BERT.py --train_data_file pathToLMTrainSet --output_dir pathToOutputModelDir --eval_data_file pathToLMTestSet --model_name_or_path modelForSpecificLanguage --mlm --do_train --do_eval --evaluate_during_training
         """
-
-        """╰─λ ls -lah ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/                                                  
-total 684M
-drwxr-xr-x 2 user user 4.0K Nov 24 22:24 ./
-drwxr-xr-x 6 user user 4.0K Nov 24 21:54 ../
--rw-r--r-- 1 user user  521 Nov 24  2018 bert_config.json
--rw-r--r-- 1 user user 682M Nov 24  2018 bert_model.ckpt.data-00000-of-00001
--rw-r--r-- 1 user user 8.5K Nov 24  2018 bert_model.ckpt.index
--rw-r--r-- 1 user user 888K Nov 24  2018 bert_model.ckpt.meta
-lrwxrwxrwx 1 user user   97 Nov 24 22:18 config.json -> /home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json
-lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_model.ckpt.index
--rw-r--r-- 1 user user 973K Nov 24  2018 vocab.txt
-"""
 
         command = '''python fine-tune_BERT.py \
         --train_data_file {pathToLMTrainSet} \
@@ -244,10 +223,10 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
         --eval_data_file {pathToLMTestSet} \
         --model_name_or_path {modelForSpecificLanguage} \
         --mlm --do_train --do_eval --evaluate_during_training \
+        \
         --per_gpu_train_batch_size {batchSize} \
-        --per_gpu_eval_batch_size {batchSize}
-
-
+        --per_gpu_eval_batch_size {batchSize} \
+        --num_train_epochs {epochs}
         '''
         # --config_name {pathToCfg}
 
@@ -260,6 +239,7 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
                                  modelForSpecificLanguage = 'bert-base-multilingual-cased',
 
                                  batchSize = batchSize,
+                                 epochs = epochs,
 
                                  # Here are other various notes from when i tried to make it work via loading a local, previously-downloaded model...
 
@@ -269,15 +249,17 @@ lrwxrwxrwx 1 user user  102 Nov 24 22:24 model.ckpt.index -> /home/user/projlogi
                                  # pathToCfg = '/home/user/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json',
         )
 
-
         # Also tried (with partial success):
         # ln -s ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/config.json
 
+        logger.info(f'{cmd=}')
         sarge.run(cmd)
 
 @logger.catch
 def main():
+    logger.debug('')
     fire.Fire()
+    logger.debug('')
 
 if __name__ == '__main__':
     main()
