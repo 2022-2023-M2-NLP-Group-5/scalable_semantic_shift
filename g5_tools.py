@@ -264,6 +264,7 @@ class bert(object):
         logger.info(f'{cmd=}')
         sarge.run(cmd)
 
+    @staticmethod
     def extract(pathToFineTunedModel:str, gpu=True):
         """
         Extract embeddings from the preprocessed corpus in .txt for COHA, DURel or Aylien corpus:
@@ -389,7 +390,7 @@ This creates a pickled file containing all contextual embeddings for all target 
         embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / 'coha_scalable.pickle'
         embeddings_path.parent.mkdir(exist_ok=True)
 
-        get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
+        get_slice_embeddings(str(embeddings_path.resolve()), datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
 
 @logger.catch
 def main():
