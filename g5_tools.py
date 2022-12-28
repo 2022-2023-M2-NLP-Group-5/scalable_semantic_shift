@@ -7,6 +7,8 @@ already set up, then you just need some of these commands):
 #oarsub -l gpu=1 -I -q production # nancy
 oarsub -l gpu=2 -I -t exotic # grenoble, lyon
 
+oarsub -I -p "cluster='gemini'" -l gpu=1,walltime=1:00  -t exotic  # lyon
+
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
 bash Mambaforge-$(uname)-$(uname -m).sh
 
@@ -23,8 +25,6 @@ bash
 conda activate ScaleSemShift
 time python g5_tools.py bert prep_coha
 time python g5_tools.py bert train
-
-# worked on neowise-3! (accessed from lyon)
 
 '''
 
@@ -45,7 +45,7 @@ except:
     import logging as logger
     logger.warning('Did not find `loguru` module, defaulting to `logging`')
 
-DEFAULT_DATA_ROOT_DIR='data/'
+DEFAULT_DATA_ROOT_DIR = Path('data/')
 
 def _download_file_maybe(url:str, out_file_path=None):
     if out_file_path is None:
@@ -173,9 +173,15 @@ class coha(object):
         paths_for_lm_output_train = [ output_dir / Path(l) / Path('train.txt') for l in corpus_slice_labels ]
         paths_for_lm_output_test =  [ output_dir / Path(l) / Path('test.txt') for l in corpus_slice_labels ]
 
+        json_output_files = [ output_dir / Path(l) / Path('full_text.json.txt') for l in corpus_slice_labels ]
+
         logger.info('\nWorking with the following paths...')
-        for e in [dirpaths_for_input_slices, input_folders, paths_for_lm_output_train, paths_for_lm_output_test]:
-            logger.info(e)
+        for el in [dirpaths_for_input_slices,
+                   input_folders,
+                   paths_for_lm_output_train,
+                   paths_for_lm_output_test,
+                   json_output_files]:
+            logger.info(el)
 
         logger.info('\nOk, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
@@ -183,7 +189,10 @@ class coha(object):
             lm_output_train.parent.mkdir(exist_ok=True, parents=True)
             lm_output_test.parent.mkdir(exist_ok=True)
             build_train_test([infolder], lm_output_train, lm_output_test)
-        # build_data_sets(input_folders, output_files) # this function outputs json files, which we have no use for
+
+        # This function outputs json files. For COHA, these files are what
+        # get_embeddings_scalable.get_slice_embeddings fn expects.
+        build_data_sets(input_folders, json_output_files)
 
 
 class bert(object):
@@ -254,6 +263,133 @@ class bert(object):
 
         logger.info(f'{cmd=}')
         sarge.run(cmd)
+
+    def extract(pathToFineTunedModel:str, gpu=True):
+        """
+        Extract embeddings from the preprocessed corpus in .txt for COHA, DURel or Aylien corpus:
+
+python get_embeddings_scalable.py --corpus_paths pathToPreprocessedCorpusSlicesSeparatedBy';' --corpus_slices nameOfCorpusSlicesSeparatedBy';' --target_path pathToTargetFile --task chooseBetween'coha','durel','aylien' --path_to_fine_tuned_model pathToFineTunedModel --embeddings_path pathToOutputEmbeddingFile
+
+This creates a pickled file containing all contextual embeddings for all target words.
+        """
+        # pathToPreprocessedCorpusSlices = ''
+        # nameOfCorpusSlices = ''
+
+        # cmd = f'''python get_embeddings_scalable.py \
+        # --corpus_paths pathToPreprocessedCorpusSlices \
+        # --corpus_slices nameOfCorpusSlices \
+        # --target_path pathToTargetFile \
+        # --task 'coha' \
+        # --path_to_fine_tuned_model {pathToFineTunedModel} \
+        # --embeddings_path pathToOutputEmbeddingFile \
+
+        # '''
+        import torch
+        from transformers import BertTokenizer, BertModel
+        from get_embeddings_scalable import get_slice_embeddings
+
+        batch_size = 16
+        max_length = 256
+
+        # slices = args.corpus_slices.split(';')
+        slices = ['1910', '1950']
+
+        # lang = 'English'
+        task = 'coha'
+
+        # task = args.task
+
+        # tasks = ['coha', 'aylien', 'durel']
+        # if task not in tasks:
+        #     print("Task not valid, valid choices are: ", ", ".join(tasks))
+        #     sys.exit()
+
+        # datasets = args.corpus_paths.split(';')
+        datasets = ['data/outputs/1910/full_text.json.txt',
+                    'data/outputs/1950/full_text.json.txt']
+
+        '''
+        NOTE: These dataset paths correspond to the files output by build_coha_corpus.build_data_sets (for coha, these are json format -- unclear why).
+
+        Cf. this section from build_coha_corpus.py:
+
+        parser.add_argument('--output_files', type=str, help='Path to output files containing text for each'
+                                                               'temporal slice separated by ";". Should correspond'
+                                                               'to the number and order of input folders.',
+                            default='data/coha/coha_1960.txt;data/coha/coha_1990.txt')
+
+        build_train_test(input_folders, args.lm_output_train, args.lm_output_test)
+        build_data_sets(input_folders, output_files)
+
+        Cf. this section from get_embeddings_scalable.py:
+
+        parser.add_argument("--corpus_paths",
+                            default='data/coha/coha_1960.txt;data/coha/coha_1990.txt',
+                            type=str,
+                            help="Paths to all corpus time slices separated by ';'.")
+        '''
+
+        # if len(args.path_to_fine_tuned_model) > 0:
+        #     fine_tuned = True
+        # else:
+        #     fine_tuned = False
+
+        fine_tuned = True
+
+        # datasets = args.corpus_paths.split(';')
+
+        # if len(args.path_to_fine_tuned_model) > 0:
+        #     state_dict =  torch.load(args.path_to_fine_tuned_model)
+
+        if task == 'coha':
+            lang = 'English'
+            # shifts_dict = get_shifts(args.target_path)
+            shifts_dict = {'cat': '42',
+                           'dog': '42',
+                           'bird': '42',
+                           'Reagan': '42',
+                           'house': '42',
+            }
+
+        # elif task == 'aylien':
+        #     lang = 'English'
+        #     shifts_dict = get_shifts(args.target_path)
+        # elif task == 'durel':
+        #     lang = 'German'
+        #     shifts_dict = get_durel_shifts(args.target_path)
+
+
+        # if lang == 'English':
+        #     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+        #     if fine_tuned:
+        #         state_dict = torch.load(args.path_to_fine_tuned_model)
+        #         model = BertModel.from_pretrained('bert-base-uncased', state_dict=state_dict, output_hidden_states=True)
+        #     else:
+        #         model = BertModel.from_pretrained('bert_base-uncased', output_hidden_states=True)
+
+        path_to_fine_tuned_model = pathToFineTunedModel
+        modelForSpecificLanguage = 'bert-base-multilingual-cased'
+        tokenizer = BertTokenizer.from_pretrained(modelForSpecificLanguage, do_lower_case=False)
+        state_dict =  torch.load(path_to_fine_tuned_model)
+        model = BertModel.from_pretrained(modelForSpecificLanguage, state_dict=state_dict, output_hidden_states=True)
+
+        # elif lang == 'German':
+        #     tokenizer = BertTokenizer.from_pretrained('bert-base-german-cased')
+        #     if fine_tuned:
+        #         state_dict = torch.load(args.path_to_fine_tuned_model)
+        #         model = BertModel.from_pretrained('bert-base-german-cased', state_dict=state_dict, output_hidden_states=True)
+        #     else:
+        #         model = BertModel.from_pretrained('bert-base-german-cased', output_hidden_states=True)
+
+        if gpu:
+            model.cuda()
+        model.eval()
+
+        # embeddings_path: is path to output the embeddings file
+        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / 'coha_scalable.pickle'
+        embeddings_path.parent.mkdir(exist_ok=True)
+
+        get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
 
 @logger.catch
 def main():
