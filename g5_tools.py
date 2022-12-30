@@ -265,9 +265,16 @@ class bert(object):
         sarge.run(cmd)
 
     @staticmethod
-    def extract(pathToFineTunedModel:str, gpu=True):
+    def extract(pathToFineTunedModel:str='data/RESULTS_train_bert_coha/1910/pytorch_model.bin',
+                dataset:str='data/outputs/1910/full_text.json.txt',
+                gpu=True):
         """
-        Extract embeddings from the preprocessed corpus in .txt for COHA, DURel or Aylien corpus:
+        Wraps get_embeddings_scalable.py.
+        Extract embeddings from the preprocessed corpus in .txt for corpus.
+
+        The original repo's functions are designed for a single monomodel, in which multiple slices/corpuses are present and can be extracted.
+
+        From original:
 
 python get_embeddings_scalable.py --corpus_paths pathToPreprocessedCorpusSlicesSeparatedBy';' --corpus_slices nameOfCorpusSlicesSeparatedBy';' --target_path pathToTargetFile --task chooseBetween'coha','durel','aylien' --path_to_fine_tuned_model pathToFineTunedModel --embeddings_path pathToOutputEmbeddingFile
 
@@ -293,7 +300,7 @@ This creates a pickled file containing all contextual embeddings for all target 
         max_length = 256
 
         # slices = args.corpus_slices.split(';')
-        slices = ['1910', '1950']
+        # slices = ['1910', '1950']
 
         # lang = 'English'
         task = 'coha'
@@ -306,8 +313,23 @@ This creates a pickled file containing all contextual embeddings for all target 
         #     sys.exit()
 
         # datasets = args.corpus_paths.split(';')
-        datasets = ['data/outputs/1910/full_text.json.txt',
-                    'data/outputs/1950/full_text.json.txt']
+
+        # datasets = ['data/outputs/1910/full_text.json.txt',
+        #             'data/outputs/1950/full_text.json.txt']
+
+        datasets = [dataset]
+        slices = [str(Path(dataset).parent.stem)]
+
+        logger.info(f'{datasets=} ; {slices=}')
+
+        # embeddings_path: is path to output the embeddings file
+        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / f'{slices[0]}_coha_scalable.pickle'
+        embeddings_path.parent.mkdir(exist_ok=True)
+
+        embeddings_path = str(embeddings_path.resolve())
+
+        logger.info(f'We will output embeddings to file: {embeddings_path=}')
+
 
         '''
         NOTE: These dataset paths correspond to the files output by build_coha_corpus.build_data_sets (for coha, these are json format -- unclear why).
@@ -352,6 +374,18 @@ This creates a pickled file containing all contextual embeddings for all target 
                            'house': '42',
             }
 
+        '''This shifts_dict, implemented for now just for testing, is necessary because the original function expects a file containing tokens and frequencies(?).
+
+        Default path listed in `get_embeddings_scalable.py` is like so:
+
+        parser.add_argument("--target_path", default='data/coha/Gulordava_word_meaning_change_evaluation_dataset.csv', type=str, help="Path to target file")
+
+        This file does not seem to be readily available online, and in any case we don't necessarily want to restrict the set of words we look at in this same way.
+
+        The functions in `get_embeddings_scalable.py` don't seem to actually do anything with the frequency info, so I have just included dummy values to fit the datastructure format.
+
+        '''
+
         # elif task == 'aylien':
         #     lang = 'English'
         #     shifts_dict = get_shifts(args.target_path)
@@ -386,11 +420,20 @@ This creates a pickled file containing all contextual embeddings for all target 
             model.cuda()
         model.eval()
 
-        # embeddings_path: is path to output the embeddings file
-        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / 'coha_scalable.pickle'
-        embeddings_path.parent.mkdir(exist_ok=True)
+        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, {model=}, {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
 
-        get_slice_embeddings(str(embeddings_path.resolve()), datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
+        get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
+
+
+    @staticmethod
+    def measure():
+        '''
+        Wraps measure_semantic_shift.py.
+
+        Method WD or JSD: "Wasserstein distance or Jensen-Shannon divergence".
+        '''
+        # TBD implement this
+        pass
 
 @logger.catch
 def main():
