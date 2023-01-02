@@ -40,7 +40,7 @@ try:
     from loguru import logger
     logger.remove()
     logger.add(sys.stderr, backtrace=True, diagnose=True, level='TRACE')
-    logger.add("g5.{time}.loguru.log", retention=10, level='TRACE')
+    logger.add("logs/g5.{time}.loguru.log", retention=50, level='TRACE')
 except:
     import logging as logger
     logger.warning('Did not find `loguru` module, defaulting to `logging`')
