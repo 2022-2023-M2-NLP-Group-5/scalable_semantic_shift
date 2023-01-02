@@ -122,7 +122,7 @@ class coha(object):
         exdir = cls.ZIP_EXTRACTION_DEST_DIR
 
         slice_pattern = str(slice_pattern)
-        logger.trace(f'{slice_pattern=}')
+        logger.info(f'{slice_pattern=}')
 
         # dir where we will store our extracted slices
         slice_out_dir = cls.SLICE_EXTRACTION_DEST_DIR_ROOT / (slice_pattern + '/')
@@ -134,7 +134,7 @@ class coha(object):
             found_matches = True # if we found at least one match for the pattern
             # NOTE: mv is faster than cp, but harms reproducibility/idempotency
             command = sarge.shell_format('mv {} {}', fpath, slice_out_dir)
-            logger.info(f'{command=}')
+            logger.debug(f'{command=}')
             sarge.run(command)
 
         if not found_matches:
@@ -142,13 +142,13 @@ class coha(object):
 
     @classmethod
     def _extract_several_slices(cls, *slices_patterns):
-        logger.trace(f'{slices_patterns=}')
+        logger.debug(f'{slices_patterns=}')
         for patt in slices_patterns:
             cls.extract_one_slice(slice_pattern=patt)
 
     @classmethod
     def extract(cls, *slices_patterns):
-        logger.trace(f'{slices_patterns=}')
+        logger.debug(f'{slices_patterns=}')
         cls._unzip_dataset()
         cls._extract_several_slices(*slices_patterns)
 
@@ -175,24 +175,48 @@ class coha(object):
 
         json_output_files = [ output_dir / Path(l) / Path('full_text.json.txt') for l in corpus_slice_labels ]
 
-        logger.info('\nWorking with the following paths...')
+        logger.debug('Working with the following paths...')
         for el in [dirpaths_for_input_slices,
                    input_folders,
                    paths_for_lm_output_train,
                    paths_for_lm_output_test,
                    json_output_files]:
-            logger.info(el)
+            logger.debug(el)
 
-        logger.info('\nOk, making changes to filesystem...')
+        logger.info('Ok, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
+
+        logger.info('Running the loop for `build_train_test()`')
         for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
+            logger.info(f'{infolder=}')
+            logger.debug(f'{lm_output_train=}, {lm_output_test=}')
             lm_output_train.parent.mkdir(exist_ok=True, parents=True)
             lm_output_test.parent.mkdir(exist_ok=True)
             build_train_test([infolder], lm_output_train, lm_output_test)
 
         # This function outputs json files. For COHA, these files are what
         # get_embeddings_scalable.get_slice_embeddings fn expects.
+        logger.info('Running `build_data_sets()`')
         build_data_sets(input_folders, json_output_files)
+
+    @classmethod
+    def prep_slices(cls, *slices):
+        """This functions wraps the other ones in this class for easy usage. It will
+perform all-in-one: download sample, clear some data workspace, extract the
+slices, build the corpuses from the slices, cleanup afterwards.
+
+        """
+        logger.debug(f'{slices=}')
+        slices = [str(l) for l in slices]
+        logger.info(f'{slices=}')
+        slice_dirs = [cls.SLICE_EXTRACTION_DEST_DIR_ROOT / l for l in slices]
+        logger.debug(f'{slice_dirs=}')
+
+        cls.download_sample()
+        cls.clear()
+        cls.extract(*slices)
+        cls.build_corpus(*slice_dirs)
+        cls.clear()
 
 
 class bert(object):
@@ -203,12 +227,17 @@ class bert(object):
         _download_file_maybe(url)
 
     @staticmethod
-    def prep_coha():
-        coha.download_sample()
-        coha.clear()
-        coha.extract('1910', '1950')
-        coha.build_corpus("data/coha/1910/","data/coha/1950/")
-        coha.clear()
+    def prep_coha(*slices):
+        if len(slices) == 0:
+             slices = list(range(1910,2010)) # Before 1900, the COHA sample corpus coverage is spotty
+
+        coha.prep_slices(*slices)
+
+        # coha.download_sample()
+        # coha.clear()
+        # coha.extract('1910', '1950')
+        # coha.build_corpus("data/coha/1910/","data/coha/1950/")
+        # coha.clear()
 
     @staticmethod
     def train(
