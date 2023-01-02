@@ -292,6 +292,12 @@ This creates a pickled file containing all contextual embeddings for all target 
         # --embeddings_path pathToOutputEmbeddingFile \
 
         # '''
+
+        logger.info('Working with the following input parameters...')
+        logger.info(f'{pathToFineTunedModel=}')
+        logger.info(f'{dataset=}')
+        logger.info(f'{gpu=}')
+
         import torch
         from transformers import BertTokenizer, BertModel
         from get_embeddings_scalable import get_slice_embeddings
@@ -402,10 +408,15 @@ This creates a pickled file containing all contextual embeddings for all target 
         #     else:
         #         model = BertModel.from_pretrained('bert_base-uncased', output_hidden_states=True)
 
-        path_to_fine_tuned_model = pathToFineTunedModel
+        # https://stackoverflow.com/questions/65882750/please-use-torch-load-with-map-location-torch-devicecpu
+        torch_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        logger.info(f'{torch_device=}')
+
         modelForSpecificLanguage = 'bert-base-multilingual-cased'
+        logger.info(f'{modelForSpecificLanguage=}')
+
         tokenizer = BertTokenizer.from_pretrained(modelForSpecificLanguage, do_lower_case=False)
-        state_dict =  torch.load(path_to_fine_tuned_model)
+        state_dict =  torch.load(pathToFineTunedModel, map_location=torch_device)
         model = BertModel.from_pretrained(modelForSpecificLanguage, state_dict=state_dict, output_hidden_states=True)
 
         # elif lang == 'German':
@@ -420,7 +431,8 @@ This creates a pickled file containing all contextual embeddings for all target 
             model.cuda()
         model.eval()
 
-        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, {model=}, {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
+        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, (for `model` see next log entry), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
+        logger.debug(f'{model=}')
 
         get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
 
