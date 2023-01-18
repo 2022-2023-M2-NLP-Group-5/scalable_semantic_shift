@@ -8,7 +8,7 @@ transformers==3.0.1
 tokenizers==0.8.0rc4
 tensorboardX==2.1
 spacy==2.3.0
-# ot
+POT
 nltk
 lemmagen3
 matplotlib
