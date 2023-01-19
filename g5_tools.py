@@ -336,7 +336,8 @@ class bert(object):
                              'stab', 'stroke', 'thump', 'tip', 'tree', 'twist', 'word', ]
 
         wordlist = sorted(list(set(SEMEVAL_WORDLIST + gulordava_wordlist)))
-        wordlist = wordlist[:3] # for testing
+        # wordlist = wordlist[:3] # for testing
+
         logger.info(f'{len(wordlist)=}, {wordlist=}')
         return wordlist
 
