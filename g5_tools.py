@@ -34,6 +34,7 @@ import shutil
 import glob
 
 import fire
+from numpy import mean
 import sarge
 
 try:
@@ -294,7 +295,84 @@ class bert(object):
         sarge.run(cmd)
 
     @staticmethod
-    def extract(pathToFineTunedModel:str='data/RESULTS_train_bert_coha/1910/pytorch_model.bin',
+    def _get_gulordava_dict():
+        '''between get_embeddings_scalable.py and get_embeddings_scalable_semeval.py, they have a lot in common but seem to have two functions which are renamed/equivalent:
+
+        get_embeddings_scalable.py has get_shifts(), get_slice_embeddings()
+
+        get_embeddings_scalable_semeval.py has get_targets(), get_time_embeddings()
+
+        get_targets() is designed to take the targets file from semeval zip, and has logic to strip the POS suffixes (_nn etc) from the list of words.
+
+        whereas get_shifts() expects the Gulordava csv file, and gets its list of words from there.
+        '''
+        # from get_embeddings_scalable import get_shifts # Gulordava csv
+        # from get_embeddings_scalable_semeval import get_targets # SemEval targets file
+        import pandas as pd
+
+        # https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
+        GULORDAVA_FILEPATH = (DEFAULT_DATA_ROOT_DIR / 'gulordava_GEMS_evaluation_dataset.csv').resolve()
+        logger.info(f'{GULORDAVA_FILEPATH=}')
+
+        # shifts_dict = get_shifts(GULORDAVA_FILEPATH)
+        '''get_embeddings_scalable.get_shifts() is not compatible with this upstream version of the file; it seems(?) to expect format like "3 users" (mean_score:int word:str)'''
+
+        shifts_dict = {}
+        df_shifts = pd.read_csv(GULORDAVA_FILEPATH, sep=',', encoding='utf8')
+        for idx, row in df_shifts.iterrows():
+            ratings = [ row[l] for l in ['p1','p2','p3','p4','p5'] ]
+            shifts_dict[row[0]] = mean(ratings)
+        return shifts_dict
+
+    @classmethod
+    def _get_wordlist_for_extract_query(cls) -> list:
+        gulordava_wordlist = list(cls._get_gulordava_dict().keys())
+
+        # might as well hardcode this since the list is so short
+        SEMEVAL_WORDLIST = [ 'attack', 'bag', 'ball', 'bit', 'chairman',
+                             'circle', 'contemplation', 'donkey', 'edge', 'face', 'fiction', 'gas', 'graft',
+                             'head', 'land', 'lane', 'lass', 'multitude', 'ounce', 'part', 'pin', 'plane',
+                             'player', 'prop', 'quilt', 'rag', 'record', 'relationship', 'risk', 'savage',
+                             'stab', 'stroke', 'thump', 'tip', 'tree', 'twist', 'word', ]
+
+        wordlist = sorted(list(set(SEMEVAL_WORDLIST + gulordava_wordlist)))
+        wordlist = wordlist[:3] # for testing
+        logger.info(f'{len(wordlist)=}, {wordlist=}')
+        return wordlist
+
+    @staticmethod
+    def _make_mockup_dict_from_wordlist(wordlist:list) -> dict:
+        '''Should output something in this format: shifts_dict = {'cat': '42', 'dog': '42', 'bird': '42', 'house': '42', }
+
+        Based on input like: wordlist = ['cat', 'dog', 'bird', 'house']
+
+        '''
+
+        '''This shifts_dict setup is necessary because the original function expects a file containing tokens and frequencies(?).
+
+        Default path listed in `get_embeddings_scalable.py` is like so:
+
+        parser.add_argument("--target_path", default='data/coha/Gulordava_word_meaning_change_evaluation_dataset.csv', type=str, help="Path to target file")
+
+        This file does not seem to be readily available online, and in any case we don't necessarily want to restrict the set of words we look at in this same way.
+
+        The functions in `get_embeddings_scalable.py` don't seem to actually do anything with the frequency info, so I have just included dummy values to fit the datastructure format.
+
+        '''
+        mockup_dict = {}
+        for w in wordlist:
+            mockup_dict[w] = 42
+        return mockup_dict
+
+    @classmethod
+    def _get_mockup_dict_for_extract_query(cls):
+        mockup_dict = cls._make_mockup_dict_from_wordlist( cls._get_wordlist_for_extract_query() )
+        logger.debug(f'{mockup_dict=}')
+        return mockup_dict
+
+    @classmethod
+    def extract(cls,
+                pathToFineTunedModel:str='data/RESULTS_train_bert_coha/1910/pytorch_model.bin',
                 dataset:str='data/outputs/1910/full_text.json.txt',
                 gpu=True):
         """
@@ -358,7 +436,7 @@ This creates a pickled file containing all contextual embeddings for all target 
         logger.info(f'{datasets=} ; {slices=}')
 
         # embeddings_path: is path to output the embeddings file
-        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / f'{slices[0]}_coha_scalable.pickle'
+        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / f'{slices[0]}.pickle'
         embeddings_path.parent.mkdir(exist_ok=True)
 
         embeddings_path = str(embeddings_path.resolve())
@@ -402,24 +480,7 @@ This creates a pickled file containing all contextual embeddings for all target 
         if task == 'coha':
             lang = 'English'
             # shifts_dict = get_shifts(args.target_path)
-            shifts_dict = {'cat': '42',
-                           'dog': '42',
-                           'bird': '42',
-                           'Reagan': '42',
-                           'house': '42',
-            }
-
-        '''This shifts_dict, implemented for now just for testing, is necessary because the original function expects a file containing tokens and frequencies(?).
-
-        Default path listed in `get_embeddings_scalable.py` is like so:
-
-        parser.add_argument("--target_path", default='data/coha/Gulordava_word_meaning_change_evaluation_dataset.csv', type=str, help="Path to target file")
-
-        This file does not seem to be readily available online, and in any case we don't necessarily want to restrict the set of words we look at in this same way.
-
-        The functions in `get_embeddings_scalable.py` don't seem to actually do anything with the frequency info, so I have just included dummy values to fit the datastructure format.
-
-        '''
+            shifts_dict = cls._get_mockup_dict_for_extract_query()
 
         # elif task == 'aylien':
         #     lang = 'English'
@@ -467,7 +528,7 @@ This creates a pickled file containing all contextual embeddings for all target 
             model.cuda()
         model.eval()
 
-        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, (for `model` see next log entry), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
+        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, (`model` too verbose to log here), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
         # logger.debug(f'{model=}')
 
         get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
