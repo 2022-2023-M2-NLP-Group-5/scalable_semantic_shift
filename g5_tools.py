@@ -33,8 +33,10 @@ from pathlib import Path
 import shutil
 import glob
 
-import fire
 from numpy import mean
+import pandas as pd
+
+import fire
 import sarge
 
 try:
@@ -219,6 +221,12 @@ slices, build the corpuses from the slices, cleanup afterwards.
         cls.build_corpus(*slice_dirs)
         cls.clear()
 
+# might as well hardcode this since the list is so short
+SEMEVAL_WORDLIST = [ 'attack', 'bag', 'ball', 'bit', 'chairman',
+                     'circle', 'contemplation', 'donkey', 'edge', 'face', 'fiction', 'gas', 'graft',
+                     'head', 'land', 'lane', 'lass', 'multitude', 'ounce', 'part', 'pin', 'plane',
+                     'player', 'prop', 'quilt', 'rag', 'record', 'relationship', 'risk', 'savage',
+                     'stab', 'stroke', 'thump', 'tip', 'tree', 'twist', 'word', ]
 
 class bert(object):
 
@@ -308,7 +316,6 @@ class bert(object):
         '''
         # from get_embeddings_scalable import get_shifts # Gulordava csv
         # from get_embeddings_scalable_semeval import get_targets # SemEval targets file
-        import pandas as pd
 
         # https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
         GULORDAVA_FILEPATH = (DEFAULT_DATA_ROOT_DIR / 'gulordava_GEMS_evaluation_dataset.csv').resolve()
@@ -327,13 +334,6 @@ class bert(object):
     @classmethod
     def _get_wordlist_for_extract_query(cls) -> list:
         gulordava_wordlist = list(cls._get_gulordava_dict().keys())
-
-        # might as well hardcode this since the list is so short
-        SEMEVAL_WORDLIST = [ 'attack', 'bag', 'ball', 'bit', 'chairman',
-                             'circle', 'contemplation', 'donkey', 'edge', 'face', 'fiction', 'gas', 'graft',
-                             'head', 'land', 'lane', 'lass', 'multitude', 'ounce', 'part', 'pin', 'plane',
-                             'player', 'prop', 'quilt', 'rag', 'record', 'relationship', 'risk', 'savage',
-                             'stab', 'stroke', 'thump', 'tip', 'tree', 'twist', 'word', ]
 
         wordlist = sorted(list(set(SEMEVAL_WORDLIST + gulordava_wordlist)))
         # wordlist = wordlist[:3] # for testing
@@ -542,14 +542,52 @@ This creates a pickled file containing all contextual embeddings for all target 
 
         Method WD or JSD: "Wasserstein distance or Jensen-Shannon divergence".
         '''
-        # TBD implement this
+        # TBD implement this.
+        # currently this step is instead implemented elsewhere, in measure_semantic_shift_merged.py
         pass
+
+
+class eval(object):
+
+    @staticmethod
+    def _filter_results_file_with_wordlist(results_filepath:str, filter_list:list=SEMEVAL_WORDLIST):
+        results_filepath = str(Path(results_filepath).resolve())
+        logger.info(f"Reading results from {results_filepath=}")
+        df = pd.read_table(results_filepath, sep=';', encoding='utf8')
+
+        df = df[ df['word'].isin(filter_list) ]
+        df = df.sort_values('word')
+
+        logger.debug(f'Filtered dataframe...:\n{df.head(999)}')
+        return df
+
+    @classmethod
+    def filter_results(cls,
+                       results_filepath:str,
+                       filter_type:str='semeval',
+                       out_filepath=''):
+        if filter_type == 'semeval':
+            filter_list = SEMEVAL_WORDLIST
+        elif filter_type == 'gulordava':
+            filter_list = gulordava_wordlist = list(bert._get_gulordava_dict().keys())
+        else:
+            raise NotImplementedError(f'{filter_type=}')
+
+        results_filepath = str(Path(results_filepath).resolve())
+        df = cls._filter_results_file_with_wordlist(results_filepath, filter_list=filter_list)
+
+        if out_filepath == '':
+            outfile_name = Path(results_filepath).stem + f'.filtered_for_{filter_type}' + f'.csv'
+            logger.debug(f'{outfile_name=}')
+            out_filepath = Path(results_filepath).parent / outfile_name
+
+        out_filepath = Path(out_filepath).resolve()
+        logger.info(f"Saving filtered results into {out_filepath=}")
+        df.to_csv(out_filepath, sep=';', encoding='utf-8', index=False)
 
 @logger.catch
 def main():
-    logger.debug('')
     fire.Fire()
-    logger.debug('')
 
 if __name__ == '__main__':
     main()
