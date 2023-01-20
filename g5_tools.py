@@ -156,9 +156,13 @@ class coha(object):
         cls._extract_several_slices(*slices_patterns)
 
     @staticmethod
-    def build_corpus(*dirpaths_for_input_slices, data_root_dir=DEFAULT_DATA_ROOT_DIR):
+    def build_corpus(*dirpaths_for_input_slices,
+                     data_root_dir=DEFAULT_DATA_ROOT_DIR,
+                     do_txt:bool=True,
+                     do_json:bool=True):
         '''Wrapper alternative to simplify the argparse version in the original build_coha_corpus.py.
         '''
+        logger.debug(f'{do_txt=}, {do_json=}')
 
         if __name__ == '__main__':
             setup_punkt()
@@ -189,18 +193,20 @@ class coha(object):
         logger.info('Ok, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
 
-        logger.info('Running the loop for `build_train_test()`')
-        for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
-            logger.info(f'{infolder=}')
-            logger.debug(f'{lm_output_train=}, {lm_output_test=}')
-            lm_output_train.parent.mkdir(exist_ok=True, parents=True)
-            lm_output_test.parent.mkdir(exist_ok=True)
-            build_train_test([infolder], lm_output_train, lm_output_test)
+        if do_txt:
+            logger.info('Running the loop for `build_train_test()`')
+            for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
+                logger.info(f'{infolder=}')
+                logger.debug(f'{lm_output_train=}, {lm_output_test=}')
+                lm_output_train.parent.mkdir(exist_ok=True, parents=True)
+                lm_output_test.parent.mkdir(exist_ok=True)
+                build_train_test([infolder], lm_output_train, lm_output_test)
 
-        # This function outputs json files. For COHA, these files are what
-        # get_embeddings_scalable.get_slice_embeddings fn expects.
-        logger.info('Running `build_data_sets()`')
-        build_data_sets(input_folders, json_output_files)
+        if do_json:
+            # This function outputs json files. For COHA, these files are what
+            # get_embeddings_scalable.get_slice_embeddings fn expects.
+            logger.info('Running `build_data_sets()`')
+            build_data_sets(input_folders, json_output_files)
 
     @classmethod
     def prep_slices(cls, *slices):
