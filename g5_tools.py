@@ -4,9 +4,6 @@
 Example prep for new node/cluster (if you're running on a cluster that is
 already set up, then you just need some of these commands):
 
-#oarsub -l gpu=1 -I -q production # nancy
-oarsub -l gpu=2 -I -t exotic # grenoble, lyon
-
 oarsub -I -p "cluster='gemini'" -l gpu=1,walltime=1:00  -t exotic  # lyon
 
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
@@ -16,39 +13,91 @@ bash # enter a new bash shell with conda/mamba available
 
 git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
-git checkout devel
+git checkout experimental # or git checkout devel # depending on context
 
 time mamba env create -f environment.yml  # 4 mins (mostly for scikit)
 
 bash
 
 conda activate ScaleSemShift
-time python g5_tools.py bert prep_coha
-time python g5_tools.py bert train
-
 '''
 
 import sys
+import os
 from pathlib import Path
 import shutil
-import glob
+import hashlib
+import contextlib # with contextlib.redirect_stdout(stream_stdout), contextlib.redirect_stderr(stream_stderr)
 
 from numpy import mean
 import pandas as pd
 
 import fire
 import sarge
+import pendulum
 
 try:
     from loguru import logger
     logger.remove()
-    logger.add(sys.stderr, backtrace=True, diagnose=True, level='TRACE')
-    logger.add("logs/g5.{time}.loguru.log", retention=50, level='TRACE')
-except:
+    # https://loguru.readthedocs.io/en/stable/api/logger.html?#loguru._logger.Logger.add
+    logger_fmt = '<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>elapsed {elapsed}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>'
+    logger.add(sys.stderr, backtrace=True, diagnose=True, level='TRACE', format=logger_fmt)
+    logger.add("logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log",      level='TRACE', retention='6 months', format=logger_fmt, colorize=True)
+    logger.add("logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.txt",  level='TRACE', retention='6 months', format=logger_fmt, colorize=False)
+    logger.add("logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.json", level='TRACE', retention='6 months', format=logger_fmt, colorize=False, serialize=True)
+except ModuleNotFoundError:
     import logging as logger
     logger.warning('Did not find `loguru` module, defaulting to `logging`')
 
 DEFAULT_DATA_ROOT_DIR = Path('data/')
+
+class _StreamToLogger:
+    '''Using this class to capture and log stderr and stdout output from subcommands.
+    See: https://loguru.readthedocs.io/en/stable/resources/recipes.html#capturing-standard-stdout-stderr-and-warnings    '''
+    def __init__(self, level="INFO"):
+        self._level = level
+    def write(self, buffer):
+        for line in buffer.rstrip().splitlines():
+            logger.opt(depth=1).log(self._level, line.rstrip())
+    def flush(self):
+        pass
+    def close(self):
+        pass
+    def isatty(self):
+        pass
+
+_stream_stdout = _StreamToLogger(level='SUCCESS')
+_stream_stderr = _StreamToLogger(level='WARNING')
+
+def sha256sum(filepath):
+    ''' https://www.quickprogrammingtips.com/python/how-to-calculate-sha256-hash-of-a-file-in-python.html '''
+    sha256_hash = hashlib.sha256()
+    with open(filepath,"rb") as f:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: f.read(4096),b""):
+            sha256_hash.update(byte_block)
+        return (sha256_hash.hexdigest())
+
+def _hash_file_maybe(filepath, max_filesize:int=500_000_000):
+    # https://flaviocopes.com/python-get-file-details/
+    full_digest, partial_digest = None, None
+    if os.path.getsize(filepath) <= max_filesize:
+        full_digest = sha256sum(filepath)
+    else:
+        logger.warning(f'not hashing full file because filesize exceeds {max_filesize=}')
+        # TBD implement partial digest of first XX bytes of large file
+        partial_digest = None
+    return {'full_digest': full_digest, 'partial_digest': partial_digest}
+
+def _file_info_digest(filepath):
+    filepath_arg = filepath
+    filepath_abs = Path(filepath).resolve()
+    digest = _hash_file_maybe(filepath_abs)
+    fileinfo = os.stat(filepath_abs)
+    results = { 'filepath_arg': filepath_arg, 'filepath_abs': filepath_abs,
+                'digest': digest, 'fileinfo': fileinfo }
+    # logger.trace(results)
+    return results
 
 def _download_file_maybe(url:str, out_file_path=None):
     if out_file_path is None:
@@ -65,6 +114,10 @@ def setup_punkt():
     '''Punkt tokenizer is used by the COHA preprocessing code (build_corpus...)'''
     import nltk
     nltk.download('punkt')
+
+def _token_id(input_string:str) -> str:
+    unique_hash_id = hashlib.sha256(str(input_string).encode()).hexdigest()
+    return unique_hash_id[:5] # just a token ending, use it combined with timestamp to avoid collisions
 
 def _freeze_hashdeep_rel(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.rel.txt'):
     command = ' hashdeep -c sha256 -revv -l "{}" > "{}" '
@@ -256,8 +309,8 @@ class bert(object):
 
     @staticmethod
     def train(
-            train = 'data/outputs/1910/train.txt',
             out = 'data/outputs/bert_training/',
+            train = 'data/outputs/1910/train.txt',
             test = 'data/outputs/1910/test.txt',
             batchSize = 7,
             epochs = 5.0, # 5.0 is the default they use
@@ -323,7 +376,7 @@ class bert(object):
         # from get_embeddings_scalable import get_shifts # Gulordava csv
         # from get_embeddings_scalable_semeval import get_targets # SemEval targets file
 
-        # https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
+        # wget https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
         GULORDAVA_FILEPATH = (DEFAULT_DATA_ROOT_DIR / 'gulordava_GEMS_evaluation_dataset.csv').resolve()
         logger.info(f'{GULORDAVA_FILEPATH=}')
 
@@ -394,19 +447,6 @@ python get_embeddings_scalable.py --corpus_paths pathToPreprocessedCorpusSlicesS
 
 This creates a pickled file containing all contextual embeddings for all target words.
         """
-        # pathToPreprocessedCorpusSlices = ''
-        # nameOfCorpusSlices = ''
-
-        # cmd = f'''python get_embeddings_scalable.py \
-        # --corpus_paths pathToPreprocessedCorpusSlices \
-        # --corpus_slices nameOfCorpusSlices \
-        # --target_path pathToTargetFile \
-        # --task 'coha' \
-        # --path_to_fine_tuned_model {pathToFineTunedModel} \
-        # --embeddings_path pathToOutputEmbeddingFile \
-
-        # '''
-
         logger.info('Working with the following input parameters...')
         logger.info(f'{pathToFineTunedModel=}')
         logger.info(f'{dataset=}')
@@ -418,9 +458,9 @@ This creates a pickled file containing all contextual embeddings for all target 
 
         batch_size = 16
         max_length = 256
+        logger.debug(f'hardcoded: {batch_size=}, {max_length=}')
 
         # slices = args.corpus_slices.split(';')
-        # slices = ['1910', '1950']
 
         # lang = 'English'
         task = 'coha'
@@ -434,22 +474,18 @@ This creates a pickled file containing all contextual embeddings for all target 
 
         # datasets = args.corpus_paths.split(';')
 
-        # datasets = ['data/outputs/1910/full_text.json.txt',
-        #             'data/outputs/1950/full_text.json.txt']
-
         datasets = [dataset]
         slices = [str(Path(dataset).parent.stem)]
 
         logger.info(f'{datasets=} ; {slices=}')
 
-        # embeddings_path: is path to output the embeddings file
-        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / f'{slices[0]}.pickle'
-        embeddings_path.parent.mkdir(exist_ok=True)
-
-        embeddings_path = str(embeddings_path.resolve())
-
+        '''# embeddings_path: is path to output the embeddings file'''
+        # dt = dt.format('YYYY-MM-DD HH:mm:ss')
+        dt = pendulum.now().format('HH\hmm')
+        stamp = dt + '_' + _token_id(pathToFineTunedModel + dataset)
+        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / stamp / f'{slices[0]}.pickle'
+        embeddings_path = embeddings_path.resolve()
         logger.info(f'We will output embeddings to file: {embeddings_path=}')
-
 
         '''
         NOTE: These dataset paths correspond to the files output by build_coha_corpus.build_data_sets (for coha, these are json format -- unclear why).
@@ -517,11 +553,17 @@ This creates a pickled file containing all contextual embeddings for all target 
         logger.info(f'{modelForSpecificLanguage=}')
 
         tokenizer = BertTokenizer.from_pretrained(modelForSpecificLanguage, do_lower_case=False)
+
+        logger.debug(f'We will load state_dict from this file: {_file_info_digest(pathToFineTunedModel)=}')
+        logger.debug('Loading state_dict...')
         if gpu:
             state_dict =  torch.load(pathToFineTunedModel)
         else:
             state_dict =  torch.load(pathToFineTunedModel, map_location=torch_device)
+
+        logger.debug('Now loading state_dict into a model...')
         model = BertModel.from_pretrained(modelForSpecificLanguage, state_dict=state_dict, output_hidden_states=True)
+        logger.debug('state_dict has been loaded into a model')
 
         # elif lang == 'German':
         #     tokenizer = BertTokenizer.from_pretrained('bert-base-german-cased')
@@ -535,11 +577,21 @@ This creates a pickled file containing all contextual embeddings for all target 
             model.cuda()
         model.eval()
 
-        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, (`model` too verbose to log here), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
-        # logger.debug(f'{model=}')
+        for dataset in datasets:
+            logger.debug(f'{_file_info_digest(dataset)=}')
 
+        logger.debug('Parameters that we will pass to get_slice_embeddings()...')
+        logger.debug(f'{embeddings_path=}, {datasets=}, {tokenizer=}, (`model` too verbose to log here), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}')
+        logger.debug(f'{model=}')
+
+        logger.info('Now running get_slice_embeddings()...')
+        embeddings_path.parent.mkdir(exist_ok=True)
+        embeddings_path = str(embeddings_path)
+        # with contextlib.redirect_stdout(stream_stdout), contextlib.redirect_stderr(stream_stderr):
         get_slice_embeddings(embeddings_path, datasets, tokenizer, model, batch_size, max_length, lang, shifts_dict, task, slices, gpu=gpu)
 
+        logger.info(f'Output embeddings pickle should now be at: {embeddings_path=}')
+        logger.debug(f'{_file_info_digest(embeddings_path)=}')
 
     @staticmethod
     def measure():
@@ -591,9 +643,38 @@ class eval(object):
         logger.info(f"Saving filtered results into {out_filepath=}")
         df.to_csv(out_filepath, sep=';', encoding='utf-8', index=False)
 
+class bla(object):
+    '''# TBD implement these all strung together (skip the first step build_semeval_lm_train_test.py)
+
+time python build_semeval_lm_train_test.py  --corpus_paths data/semeval2020_ulscd_eng/corpus2/token/ccoha2.txt --target_path data/semeval2020_ulscd_eng/targets.txt --language english --lm_train_test_folder data/c2_corpus_out
+
+time python g5_tools.py bert train --train 'data/c2_corpus_out/train.txt' --out 'data/outputs/bert_c2_v2/' --test 'data/c2_corpus_out/test.txt'  --epochs 5 --batchSize 7
+
+time python g5_tools.py bert extract --pathToFineTunedModel 'data/outputs/bert_c2_v2/pytorch_model.bin' --dataset 'data/cohasem_corpus2/full_text.json.txt' --gpu True
+
+time python measure_semantic_shift_merged.py --embeddings_path 'data/embeddings/from_bert_v2/' --corpus_slices 'cohasem_corpus1;cohasem_corpus2'
+
+time python g5_tools.py eval filter_results 'results_coha/word_ranking_results_WD.csv' --filter_type semeval
+
+time python evaluate.py --task 'semeval' --gold_standard_path 'data/semeval2020_ulscd_eng/truth/graded.txt' --results_path 'results_coha/word_ranking_results_WD.filtered_for_semeval.csv' --corpus_slices 'cohasem_corpus1;cohasem_corpus2'
+'''
+
 @logger.catch
 def main():
-    fire.Fire()
+    with contextlib.redirect_stdout(_stream_stdout), contextlib.redirect_stderr(_stream_stderr):
+        print("NOTE: Standard output (stdout) is sent to added handlers, like so.")
+        print("NOTE: Standard error  (stderr) is sent to added handlers, like so.", file=sys.stderr)
+        # Note that with Fire in here, fire can never print to stdout (this
+        # even messes up the Fire autogenerated help pages). If we ever decide
+        # we have a legitimate reason to print to stdout (for example we want
+        # to redirect to a file with >), then we can move the context mgr to
+        # each spot where we call out to an external fn/cmd, rather than having
+        # it centralized here.
+        fire.Fire()
+        # The upside of doing this centrally here is that we will be able to
+        # catch *all* the output that any subcommands try to send, and log it
+        # for reference.
+    logger.debug('exiting')
 
 if __name__ == '__main__':
     main()
