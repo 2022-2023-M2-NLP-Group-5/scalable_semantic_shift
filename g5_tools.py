@@ -29,6 +29,8 @@ import shutil
 import hashlib
 import contextlib # with contextlib.redirect_stdout(stream_stdout), contextlib.redirect_stderr(stream_stderr)
 
+import time
+
 from numpy import mean
 import pandas as pd
 
@@ -69,6 +71,53 @@ class _StreamToLogger:
 _stream_stdout = _StreamToLogger(level='SUCCESS')
 _stream_stderr = _StreamToLogger(level='WARNING')
 
+def _print_log(c_err:sarge.Capture, c_out:sarge.Capture, cmd_label:str):
+    stderr_msg = c_err.readline()
+    stdout_msg = c_out.readline()
+    if len(stderr_msg) > 0:
+        log_line = [ cmd_label, 'stderr', stderr_msg ]
+        print(log_line, file=sys.stderr)
+    if len(stdout_msg) > 0:
+        log_line = [ cmd_label, 'stdout', stdout_msg ]
+        print(log_line, file=sys.stdout)
+
+def _run_cmd(cmd, cmd_label='',
+             # redirect_stderr=True, redirect_stdout=False # need to implement these flags in order to use this fn for hashdeep too
+             ):
+    logger.debug(f'({cmd_label=}), running: {cmd=}')
+    # use -1 for line-buffering
+    # if redirect_stderr:
+    c_err = sarge.Capture(buffer_size=1)
+    # if redirect_stdout:
+    c_out = sarge.Capture(buffer_size=1)
+
+    p = sarge.run(cmd,
+                  async_=True,
+                  stdout=c_out,
+                  stderr=c_err,
+                  )
+
+    # Check if subprocess has finished
+    # https://stackoverflow.com/questions/35855263/check-if-subprocess-is-still-running-while-reading-its-output-line-by-line
+    while p.poll_all()[-1] is None:
+        # print(f'{p.poll_all()=}')
+        _print_log(c_err, c_out, cmd_label)
+
+    p.wait() # seems to run the same without this
+    logger.debug('Detected that the subprocess is ending...')
+
+    WAIT_FOR_SECS = 0.2
+    logger.debug(f'We need to catch any output that we were too slow to catch before... continuing to monitor output for {WAIT_FOR_SECS=}')
+    # https://stackoverflow.com/questions/24374620/python-loop-to-run-for-certain-amount-of-seconds
+    end_time = time.monotonic() + WAIT_FOR_SECS
+    while time.monotonic() < end_time:
+        _print_log(c_err, c_out, cmd_label)
+
+    logger.debug(f'Command subprocess has exited: {cmd_label=}, {p.poll_all()[-1]=}, {p.returncodes=}')
+    for ret in p.returncodes:
+        if ret != 0:
+            logger.error(f'Warning: At least one of the returncodes is non-zero. The cmd might not have succeeded.')
+
 def sha256sum(filepath):
     ''' https://www.quickprogrammingtips.com/python/how-to-calculate-sha256-hash-of-a-file-in-python.html '''
     sha256_hash = hashlib.sha256()
@@ -108,7 +157,9 @@ def _download_file_maybe(url:str, out_file_path=None):
     else:
         # https://stackoverflow.com/questions/1078524/how-to-specify-the-download-location-with-wget
         command = sarge.shell_format('wget -O {} {} ', out_file_path, url)
-        sarge.run(command)
+        # logger.info(f'Running {command=}')
+        # sarge.run(command)
+        _run_cmd(command, cmd_label='wget')
 
 def setup_punkt():
     '''Punkt tokenizer is used by the COHA preprocessing code (build_corpus...)'''
@@ -124,7 +175,6 @@ def _freeze_hashdeep_rel(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_na
     command = sarge.shell_format(command, data_dirpath, hashdeep_outfile_name)
     logger.info(f'Running {command=}')
     sarge.run(command)
-    # return p.returncode
 
 def _freeze_hashdeep_bare(data_dirpath=DEFAULT_DATA_ROOT_DIR, hashdeep_outfile_name='data.hashdeep.bare.txt'):
     command = ' hashdeep -c sha256 -revv -b "{}" > "{}" '
@@ -190,8 +240,9 @@ class coha(object):
             found_matches = True # if we found at least one match for the pattern
             # NOTE: mv is faster than cp, but harms reproducibility/idempotency
             command = sarge.shell_format('mv {} {}', fpath, slice_out_dir)
-            logger.debug(f'{command=}')
-            sarge.run(command)
+            # logger.debug(f'{command=}')
+            # sarge.run(command)
+            _run_cmd(command)
 
         if not found_matches:
             logger.warning('No matching files')
@@ -246,20 +297,21 @@ class coha(object):
         logger.info('Ok, making changes to filesystem...')
         output_dir.mkdir(exist_ok=True) # create outputs dir if it does not exist yet
 
+        # Json generation runs much faster than txt, so we will do it first
+        if do_json:
+            # This function outputs json files. For COHA, these files are what
+            # get_embeddings_scalable.get_slice_embeddings fn expects.
+            logger.info('Running `build_data_sets()` to make json files...')
+            build_data_sets(input_folders, json_output_files)
+
         if do_txt:
-            logger.info('Running the loop for `build_train_test()`')
+            logger.info('Running the loop for `build_train_test()` to make train.txt and test.txt files...')
             for infolder, lm_output_train, lm_output_test in zip(input_folders, paths_for_lm_output_train, paths_for_lm_output_test):
                 logger.info(f'{infolder=}')
                 logger.debug(f'{lm_output_train=}, {lm_output_test=}')
                 lm_output_train.parent.mkdir(exist_ok=True, parents=True)
                 lm_output_test.parent.mkdir(exist_ok=True)
                 build_train_test([infolder], lm_output_train, lm_output_test)
-
-        if do_json:
-            # This function outputs json files. For COHA, these files are what
-            # get_embeddings_scalable.get_slice_embeddings fn expects.
-            logger.info('Running `build_data_sets()`')
-            build_data_sets(input_folders, json_output_files)
 
     @classmethod
     def prep_slices(cls, *slices):
@@ -287,6 +339,10 @@ SEMEVAL_WORDLIST = [ 'attack', 'bag', 'ball', 'bit', 'chairman',
                      'player', 'prop', 'quilt', 'rag', 'record', 'relationship', 'risk', 'savage',
                      'stab', 'stroke', 'thump', 'tip', 'tree', 'twist', 'word', ]
 
+TESTING_BERT_TRAINTXT_PATH = 'data/outputs/1910/train.txt'
+TESTING_BERT_TESTTXT_PATH = 'data/outputs/1910/test.txt'
+TESTING_BERT_FULLTEXTJSON_PATH = 'data/outputs/1910/full_text.json.txt'
+
 class bert(object):
 
     @staticmethod
@@ -310,8 +366,8 @@ class bert(object):
     @staticmethod
     def train(
             out = 'data/outputs/bert_training/',
-            train = 'data/outputs/1910/train.txt',
-            test = 'data/outputs/1910/test.txt',
+            train = TESTING_BERT_TRAINTXT_PATH,
+            test = TESTING_BERT_TESTTXT_PATH,
             batchSize = 7,
             epochs = 5.0, # 5.0 is the default they use
             # **kwargs, # TBD: figure out how to implement generic kwargs passthru
@@ -359,7 +415,7 @@ class bert(object):
         # ln -s ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/config.json
 
         logger.info(f'{cmd=}')
-        sarge.run(cmd)
+        _run_cmd(cmd, cmd_label='fine-tune_BERT.py')
 
     @staticmethod
     def _get_gulordava_dict():
@@ -434,6 +490,7 @@ class bert(object):
     def extract(cls,
                 pathToFineTunedModel:str='data/RESULTS_train_bert_coha/1910/pytorch_model.bin',
                 dataset:str='data/outputs/1910/full_text.json.txt',
+                embeddings_path=None,
                 gpu=True):
         """
         Wraps get_embeddings_scalable.py.
@@ -480,10 +537,11 @@ This creates a pickled file containing all contextual embeddings for all target 
         logger.info(f'{datasets=} ; {slices=}')
 
         '''# embeddings_path: is path to output the embeddings file'''
-        # dt = dt.format('YYYY-MM-DD HH:mm:ss')
-        dt = pendulum.now().format('HH\hmm')
-        stamp = dt + '_' + _token_id(pathToFineTunedModel + dataset)
-        embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / stamp / f'{slices[0]}.pickle'
+        if embeddings_path is None:
+            # dt = dt.format('YYYY-MM-DD HH:mm:ss')
+            dt = pendulum.now().format('HH\hmm')
+            stamp = dt + '_' + _token_id(pathToFineTunedModel + dataset)
+            embeddings_path = DEFAULT_DATA_ROOT_DIR / 'embeddings' / stamp / f'{slices[0]}.pickle'
         embeddings_path = embeddings_path.resolve()
         logger.info(f'We will output embeddings to file: {embeddings_path=}')
 
@@ -643,8 +701,12 @@ class eval(object):
         logger.info(f"Saving filtered results into {out_filepath=}")
         df.to_csv(out_filepath, sep=';', encoding='utf-8', index=False)
 
-class bla(object):
+class run(object):
     '''# TBD implement these all strung together (skip the first step build_semeval_lm_train_test.py)
+
+    # NOTE: additional step here is missing from list: producing 'data/cohasem_corpus2/full_text.json.txt'...
+
+    # This is an example of the pipeline as run manually:
 
 time python build_semeval_lm_train_test.py  --corpus_paths data/semeval2020_ulscd_eng/corpus2/token/ccoha2.txt --target_path data/semeval2020_ulscd_eng/targets.txt --language english --lm_train_test_folder data/c2_corpus_out
 
@@ -658,6 +720,36 @@ time python g5_tools.py eval filter_results 'results_coha/word_ranking_results_W
 
 time python evaluate.py --task 'semeval' --gold_standard_path 'data/semeval2020_ulscd_eng/truth/graded.txt' --results_path 'results_coha/word_ranking_results_WD.filtered_for_semeval.csv' --corpus_slices 'cohasem_corpus1;cohasem_corpus2'
 '''
+
+    @staticmethod
+    def train_extract(train=TESTING_BERT_TRAINTXT_PATH, # 'data/c2_corpus_out/train.txt',
+                      test=TESTING_BERT_TESTTXT_PATH, # 'data/c2_corpus_out/test.txt',
+                      full_text_json=TESTING_BERT_FULLTEXTJSON_PATH, # 'data/cohasem_corpus2/full_text.json.txt',
+                      epochs=5, batchSize=7
+                      ):
+        '''NOTE: The default path arguments are just for testing purposes.'''
+
+        unattended_run_dirpath = (DEFAULT_DATA_ROOT_DIR / 'unattended_runs' / str(pendulum.now())).resolve()
+        logger.info(f'{unattended_run_dirpath=}')
+
+        # time python g5_tools.py bert train --train 'data/c2_corpus_out/train.txt' --out 'data/outputs/bert_c2_v2/' --test 'data/c2_corpus_out/test.txt'  --epochs 5 --batchSize 7
+
+        train_output_dir = (unattended_run_dirpath/'bert_train').resolve()
+        bert.train(train=train, test=test, out=str(train_output_dir), epochs=epochs, batchSize=batchSize)
+
+        # time python g5_tools.py bert extract --pathToFineTunedModel 'data/outputs/bert_c2_v2/pytorch_model.bin' --dataset 'data/cohasem_corpus2/full_text.json.txt' --gpu True
+
+        dataset = Path(full_text_json).resolve()
+        slice = str(Path(dataset).parent.stem)
+        embeddings_out_filepath = (unattended_run_dirpath / f'{slice}.pickle').resolve()
+
+        unattended_run_dirpath.parent.mkdir(exist_ok=True)
+        unattended_run_dirpath.mkdir(exist_ok=False)
+        train_output_dir.mkdir(exist_ok=False)
+        bert.extract(pathToFineTunedModel= str(train_output_dir/'pytorch_model.bin'),
+                     dataset=full_text_json,
+                     gpu=True,
+                     embeddings_path=embeddings_out_filepath)
 
 @logger.catch
 def main():
@@ -674,7 +766,7 @@ def main():
         # The upside of doing this centrally here is that we will be able to
         # catch *all* the output that any subcommands try to send, and log it
         # for reference.
-    logger.debug('exiting')
+    logger.debug('end of script')
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
