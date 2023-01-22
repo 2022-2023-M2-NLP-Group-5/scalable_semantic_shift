@@ -97,9 +97,10 @@ def _print_log(c_err: sarge.Capture, c_out: sarge.Capture, cmd_label: str):
 def _run_cmd(
     cmd,
     cmd_label="",
+    extra_wait_for_secs=0.1,
     # redirect_stderr=True, redirect_stdout=False # need to implement these flags in order to use this fn for hashdeep too
 ):
-    logger.debug(f"{cmd_label=}, running: {cmd=}")
+    logger.info(f"{cmd_label=}, running: {cmd=}")
     # use -1 for line-buffering
     # if redirect_stderr:
     c_err = sarge.Capture(buffer_size=1)
@@ -122,12 +123,11 @@ def _run_cmd(
     p.wait()  # seems to run the same without this
     logger.debug("Detected that the subprocess is ending...")
 
-    WAIT_FOR_SECS = 0.2
     logger.debug(
-        f"We need to catch any output that we were too slow to catch before... continuing to monitor output for {WAIT_FOR_SECS=}"
+        f"We need to catch any output that we were too slow to catch before... continuing to monitor output for {extra_wait_for_secs=}"
     )
     # https://stackoverflow.com/questions/24374620/python-loop-to-run-for-certain-amount-of-seconds
-    end_time = time.monotonic() + WAIT_FOR_SECS
+    end_time = time.monotonic() + extra_wait_for_secs
     while time.monotonic() < end_time:
         _print_log(c_err, c_out, cmd_label)
 
@@ -484,8 +484,8 @@ class bert(object):
         # Also tried (with partial success):
         # ln -s ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/bert_config.json ~/projlogiciel/scalable_semantic_shift/data/multi_cased_L-12_H-768_A-12/config.json
 
-        logger.info(f"{cmd=}")
-        _run_cmd(cmd, cmd_label="fine-tune_BERT.py")
+        logger.debug(f"{cmd=}")
+        _run_cmd(cmd, cmd_label="fine-tune_BERT.py", extra_wait_for_secs=5)
 
     @staticmethod
     def _get_gulordava_dict():
@@ -840,6 +840,14 @@ class run(object):
         # time python g5_tools.py bert train --train 'data/c2_corpus_out/train.txt' --out 'data/outputs/bert_c2_v2/' --test 'data/c2_corpus_out/test.txt'  --epochs 5 --batchSize 7
 
         train_output_dir = (unattended_run_dirpath / "bert_train").resolve()
+
+        unattended_run_dirpath.parent.mkdir(exist_ok=True)
+        unattended_run_dirpath.mkdir(exist_ok=False)
+        train_output_dir.mkdir(exist_ok=False)
+
+        logger.debug(f"{os.stat(unattended_run_dirpath)=}")
+        logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
+
         bert.train(
             train=train,
             test=test,
@@ -848,21 +856,23 @@ class run(object):
             batchSize=batchSize,
         )
 
+        logger.debug(f"{os.stat(unattended_run_dirpath)=}")
+        logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
+
         # time python g5_tools.py bert extract --pathToFineTunedModel 'data/outputs/bert_c2_v2/pytorch_model.bin' --dataset 'data/cohasem_corpus2/full_text.json.txt' --gpu True
 
         dataset = Path(full_text_json).resolve()
         slice = str(Path(dataset).parent.stem)
         embeddings_out_filepath = (unattended_run_dirpath / f"{slice}.pickle").resolve()
 
-        unattended_run_dirpath.parent.mkdir(exist_ok=True)
-        unattended_run_dirpath.mkdir(exist_ok=False)
-        train_output_dir.mkdir(exist_ok=False)
         bert.extract(
             pathToFineTunedModel=str(train_output_dir / "pytorch_model.bin"),
             dataset=full_text_json,
             gpu=True,
             embeddings_path=embeddings_out_filepath,
         )
+        logger.debug(f"{os.stat(unattended_run_dirpath)=}")
+        logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
 
 
 @logger.catch
