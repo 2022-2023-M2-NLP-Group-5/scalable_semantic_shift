@@ -44,31 +44,12 @@ try:
     logger.remove()
     # https://loguru.readthedocs.io/en/stable/api/logger.html?#loguru._logger.Logger.add
     logger_fmt = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>elapsed {elapsed}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-    logger.add(
-        sys.stderr, backtrace=True, diagnose=True, level="TRACE", format=logger_fmt
-    )
-    logger.add(
-        "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log",
-        level="TRACE",
-        retention="6 months",
-        format=logger_fmt,
-        colorize=True,
-    )
-    logger.add(
-        "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.txt",
-        level="TRACE",
-        retention="6 months",
-        format=logger_fmt,
-        colorize=False,
-    )
-    logger.add(
-        "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.json",
-        level="TRACE",
-        retention="6 months",
-        format=logger_fmt,
-        colorize=False,
-        serialize=True,
-    )
+    # fmt: off
+    logger.add( sys.stderr, backtrace=True, diagnose=True, level="TRACE", format=logger_fmt )
+    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log", level="TRACE", retention="6 months", format=logger_fmt, colorize=True, )
+    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.txt",  level="TRACE", retention="6 months", format=logger_fmt, colorize=False, )
+    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.json", level="TRACE", retention="6 months", format=logger_fmt, colorize=False, serialize=True, )
+    # fmt: on
 except ModuleNotFoundError:
     import logging as logger
 
