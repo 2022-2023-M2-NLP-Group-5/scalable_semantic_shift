@@ -75,16 +75,16 @@ def _print_log(c_err:sarge.Capture, c_out:sarge.Capture, cmd_label:str):
     stderr_msg = c_err.readline()
     stdout_msg = c_out.readline()
     if len(stderr_msg) > 0:
-        log_line = [ cmd_label, 'stderr', stderr_msg ]
+        log_line = ( cmd_label, 'stderr', stderr_msg )
         print(log_line, file=sys.stderr)
     if len(stdout_msg) > 0:
-        log_line = [ cmd_label, 'stdout', stdout_msg ]
+        log_line = ( cmd_label, 'stdout', stdout_msg )
         print(log_line, file=sys.stdout)
 
 def _run_cmd(cmd, cmd_label='',
              # redirect_stderr=True, redirect_stdout=False # need to implement these flags in order to use this fn for hashdeep too
              ):
-    logger.debug(f'({cmd_label=}), running: {cmd=}')
+    logger.debug(f'{cmd_label=}, running: {cmd=}')
     # use -1 for line-buffering
     # if redirect_stderr:
     c_err = sarge.Capture(buffer_size=1)
@@ -753,6 +753,7 @@ time python evaluate.py --task 'semeval' --gold_standard_path 'data/semeval2020_
 
 @logger.catch
 def main():
+    logger.debug(f"CLI invocation argument list: {sys.argv=}")
     with contextlib.redirect_stdout(_stream_stdout), contextlib.redirect_stderr(_stream_stderr):
         print("NOTE: Standard output (stdout) is sent to added handlers, like so.")
         print("NOTE: Standard error  (stderr) is sent to added handlers, like so.", file=sys.stderr)
