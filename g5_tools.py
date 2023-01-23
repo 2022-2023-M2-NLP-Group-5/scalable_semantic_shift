@@ -658,6 +658,7 @@ class bert(object):
         # if len(args.path_to_fine_tuned_model) > 0:
         #     state_dict =  torch.load(args.path_to_fine_tuned_model)
 
+        logger.info(f'{target_path=}')
         if task == "coha":
             lang = language
             shifts_dict = get_targets(target_path, lang)
