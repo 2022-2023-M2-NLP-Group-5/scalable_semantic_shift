@@ -194,8 +194,9 @@ def _download_file_maybe(url: str, out_file_path=None):
         # https://stackoverflow.com/questions/1078524/how-to-specify-the-download-location-with-wget
         command = sarge.shell_format("wget -O {} {} ", out_file_path, url)
         # logger.info(f'Running {command=}')
-        # sarge.run(command)
         _run_cmd(command, cmd_label="wget")
+
+    logger.debug(f"{_file_info_digest(out_file_path)=}")
 
 
 def setup_punkt():
@@ -258,7 +259,7 @@ class coha(object):
             logger.warning(f"Aborting because {exdir=} ...seems to already exist")
             sys.exit(1)
         command = sarge.shell_format("unzip -q -d {} {} ", exdir, zipfile_path)
-        sarge.run(command)
+        _run_cmd(command, cmd_label="unzip")
 
     @classmethod
     def clear(cls):
@@ -290,8 +291,7 @@ class coha(object):
             # NOTE: mv is faster than cp, but harms reproducibility/idempotency
             command = sarge.shell_format("mv {} {}", fpath, slice_out_dir)
             # logger.debug(f'{command=}')
-            # sarge.run(command)
-            _run_cmd(command)
+            _run_cmd(command, cmd_label="mv", extra_wait_for_secs=0)
 
         if not found_matches:
             logger.warning("No matching files")
@@ -832,6 +832,10 @@ class run(object):
     ):
         """NOTE: The default path arguments are just for testing purposes."""
 
+        logger.debug(f"{_file_info_digest(train)=}")
+        logger.debug(f"{_file_info_digest(test)=}")
+        logger.debug(f"{_file_info_digest(full_text_json)=}")
+
         unattended_run_dirpath = (
             DEFAULT_DATA_ROOT_DIR / "unattended_runs" / str(pendulum.now())
         ).resolve()
@@ -839,6 +843,8 @@ class run(object):
 
         # time python g5_tools.py bert train --train 'data/c2_corpus_out/train.txt' --out 'data/outputs/bert_c2_v2/' --test 'data/c2_corpus_out/test.txt'  --epochs 5 --batchSize 7
 
+        train = Path(train).resolve()
+        test = Path(test).resolve()
         train_output_dir = (unattended_run_dirpath / "bert_train").resolve()
 
         unattended_run_dirpath.parent.mkdir(exist_ok=True)
@@ -849,8 +855,8 @@ class run(object):
         logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
 
         bert.train(
-            train=train,
-            test=test,
+            train=str(train),
+            test=str(test),
             out=str(train_output_dir),
             epochs=epochs,
             batchSize=batchSize,
@@ -861,8 +867,9 @@ class run(object):
 
         # time python g5_tools.py bert extract --pathToFineTunedModel 'data/outputs/bert_c2_v2/pytorch_model.bin' --dataset 'data/cohasem_corpus2/full_text.json.txt' --gpu True
 
-        dataset = Path(full_text_json).resolve()
-        slice = str(Path(dataset).parent.stem)
+        full_text_json = Path(full_text_json).resolve()
+        # dataset = Path(full_text_json).resolve()
+        slice = str(Path(full_text_json).parent.stem)
         embeddings_out_filepath = (unattended_run_dirpath / f"{slice}.pickle").resolve()
 
         bert.extract(
