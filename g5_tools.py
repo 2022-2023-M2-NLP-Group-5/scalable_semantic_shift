@@ -566,6 +566,8 @@ class bert(object):
         pathToFineTunedModel: str = "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset: str = "data/outputs/1910/full_text.json.txt",
         embeddings_path=None,
+	target_path: str = "data/semeval2020_ulscd_eng/targets.txt",
+	language: str = "english",
         gpu=True,
     ):
         """
@@ -587,8 +589,8 @@ class bert(object):
 
         import torch
         from transformers import BertTokenizer, BertModel
-        from get_embeddings_scalable import get_slice_embeddings
-
+        from get_embeddings_scalable import get_slice_embeddings,get_shifts
+        from get_embeddings_scalable_semeval import get_targets
         batch_size = 16
         max_length = 256
         logger.debug(f"hardcoded: {batch_size=}, {max_length=}")
@@ -657,9 +659,9 @@ class bert(object):
         #     state_dict =  torch.load(args.path_to_fine_tuned_model)
 
         if task == "coha":
-            lang = "English"
-            # shifts_dict = get_shifts(args.target_path)
-            shifts_dict = cls._get_mockup_dict_for_extract_query()
+            lang = language
+            shifts_dict = get_targets(target_path, lang)
+            #shifts_dict = cls._get_mockup_dict_for_extract_query()
 
         # elif task == 'aylien':
         #     lang = 'English'

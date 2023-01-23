@@ -87,10 +87,14 @@ def tokens_to_batches(ds, tokenizer, batch_size, max_length, target_words, lang,
 
             # print(line)
             contains = False
-            for w in target_words:
+            for i, w in enumerate(target_words):
+                print(i, len(target_words))
                 if w.strip() in tokenized_words:
                     frequencies[w] += text.count(w)
                     contains = True
+                else:
+                    frequencies[w] = 0
+                    contains = False
 
             if contains or task in ['aylien', 'durel']:
                 tokenized_text = []
@@ -100,6 +104,7 @@ def tokens_to_batches(ds, tokenizer, batch_size, max_length, target_words, lang,
 
                 for sent in sent_tokenizer.tokenize(text):
                     sent_counter += 1
+                    print(sent_counter / len(sent_tokenizer.tokenize(text)))
                     if lang != 'German':
                         lsent = sent.strip().lower()
                     else:
