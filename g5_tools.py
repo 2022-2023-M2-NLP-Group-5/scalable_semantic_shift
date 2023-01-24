@@ -39,6 +39,8 @@ import sarge
 import pendulum
 import filehash
 
+filehasher = filehash.FileHash()
+
 try:
     from loguru import logger
 
@@ -753,7 +755,7 @@ class bert(object):
         logger.debug(f"{_file_info_digest(embeddings_path)=}")
 
         logger.debug(
-            f"{filehash.hash_dir(DEFAULT_DATA_ROOT_DIR, pattern='*')=}"
+            f"{filehasher.hash_dir(DEFAULT_DATA_ROOT_DIR, pattern='*')=}"
         )  # TBD move this to where hashing a dir makes sense
 
     @staticmethod
@@ -888,7 +890,7 @@ class run(object):
         )
         logger.debug(f"{os.stat(unattended_run_dirpath)=}")
         logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
-        logger.debug("{filehash.hash_dir(unattended_run_dirpath, pattern='*')=}")
+        logger.debug("{filehasher.hash_dir(unattended_run_dirpath, pattern='*')=}")
 
 
 @logger.catch
