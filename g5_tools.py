@@ -492,6 +492,21 @@ class bert(object):
         _run_cmd(cmd, cmd_label="fine-tune_BERT.py", extra_wait_for_secs=5)
 
     @staticmethod
+    def read_wordlist_from_file(input_path) -> list:
+        """This fn expects a text file with one word per line. It will work on
+        data/semeval2020_ulscd_ger/targets.txt ; but not on the English semeval target
+        file (English one is different format, it includes POS suffixes).
+
+        """
+        targets_list = []
+        with open(input_path, "r", encoding="utf8") as f:
+            for line in f:
+                target = line.strip()
+                targets_list.append(target)
+        logger.debug(f"{len(targets_list)=}")
+        return sorted(set(targets_list))
+
+    @staticmethod
     def _get_gulordava_dict():
         """between get_embeddings_scalable.py and get_embeddings_scalable_semeval.py, they have a lot in common but seem to have two functions which are renamed/equivalent:
 
@@ -523,10 +538,15 @@ class bert(object):
         return shifts_dict
 
     @classmethod
-    def _get_wordlist_for_extract_query(cls) -> list:
-        gulordava_wordlist = list(cls._get_gulordava_dict().keys())
+    def _get_wordlist_for_extract_query(
+        cls, path="data/semeval2020_ulscd_ger/targets.txt"
+    ) -> list:
+        # gulordava_wordlist = list(cls._get_gulordava_dict().keys())
+        # wordlist = SEMEVAL_WORDLIST + gulordava_wordlist
 
-        wordlist = sorted(list(set(SEMEVAL_WORDLIST + gulordava_wordlist)))
+        wordlist = cls.read_wordlist_from_file(input_path=path)
+
+        wordlist = sorted(list(set(wordlist)))
         # wordlist = wordlist[:3]  # for testing
 
         logger.info(f"{len(wordlist)=}, {wordlist=}")
