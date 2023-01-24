@@ -212,9 +212,9 @@ def setup_punkt():
 
 def _token_id(input_string: str) -> str:
     unique_hash_id = hashlib.sha256(str(input_string).encode()).hexdigest()
-    return unique_hash_id[
-        :5
-    ]  # just a token ending, use it combined with timestamp to avoid collisions
+    # just a token ending, use it combined with timestamp to avoid collisions
+    unique_hash_id = unique_hash_id[:6]
+    return unique_hash_id
 
 
 def _freeze_hashdeep_rel(
@@ -657,7 +657,7 @@ class bert(object):
         """# embeddings_path: is path to output the embeddings file"""
         if embeddings_path is None:
             # dt = dt.format('YYYY-MM-DD HH:mm:ss')
-            dt = pendulum.now().format("HH\hmm")
+            dt = pendulum.now().format("MM-DD_HH\hmm")
             stamp = dt + "_" + _token_id(pathToFineTunedModel + dataset)
             embeddings_path = (
                 DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slices[0]}.pickle"
