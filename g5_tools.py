@@ -328,9 +328,18 @@ class coha(object):
         # this import needs punkt already downloaded in order to succeed
         from build_coha_corpus import build_train_test, build_data_sets
 
+        # First we setup all our paths that we will use, without modifying anything on disk yet...
+
         data_root_dir = Path(data_root_dir)
         output_dir = data_root_dir / Path("outputs")
 
+        dirpaths_for_input_slices = [
+            Path(p).resolve() for p in dirpaths_for_input_slices
+        ]
+
+        # NOTE TBD: input_folders and dirpaths_for_input_slices are pretty much
+        # the same, we can probably change this to collapse these into one
+        # variable
         input_folders = [Path(dirpath) for dirpath in dirpaths_for_input_slices]
 
         corpus_slice_labels = [
@@ -359,11 +368,18 @@ class coha(object):
         ]:
             logger.debug(el)
 
+        for d in dirpaths_for_input_slices:
+            logger.debug(f"{filehasher.hash_dir(d, pattern='*')=}")
+
+        # Now we start doing actions that will modify things on disk...
+
         logger.info("Ok, making changes to filesystem...")
         output_dir.mkdir(exist_ok=True)  # create outputs dir if it does not exist yet
 
         # Json generation runs much faster than txt, so we will do it first
         if do_json:
+            for json_filepath in json_output_files:
+                json_filepath.parent.mkdir(exist_ok=True, parents=True)
             # This function outputs json files. For COHA, these files are what
             # get_embeddings_scalable.get_slice_embeddings fn expects.
             logger.info("Running `build_data_sets()` to make json files...")
@@ -910,7 +926,7 @@ class run(object):
         )
         logger.debug(f"{os.stat(unattended_run_dirpath)=}")
         logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
-        logger.debug("{filehasher.hash_dir(unattended_run_dirpath, pattern='*')=}")
+        logger.debug(f"{filehasher.hash_dir(unattended_run_dirpath, pattern='*')=}")
 
 
 @logger.catch
