@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
         logger.remove()
         # https://loguru.readthedocs.io/en/stable/api/logger.html?#loguru._logger.Logger.add
-        LOGGER_FORMAT = "<green>{time:MM-DD HH:mm:ss.SSS}</green> | <level>{elapsed}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+        LOGGER_FORMAT = "<green>{time:MM-DD HH:mm:ss.SSS}</green>|<level>{elapsed}</level>|<level>{level: <8}</level>|<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
         # dt = dt.format('YYYY-MM-DD HH:mm:ss')
         timestamp = pendulum.now()  # .format()
         logfile = f"g5.{timestamp}.loguru"
@@ -989,6 +989,82 @@ class run(object):
         logger.debug(f"{os.stat(unattended_run_dirpath)=}")
         logger.debug(f'{ [p for p in unattended_run_dirpath.rglob("*")] =}')
         logger.debug(f"{filehasher.hash_dir(unattended_run_dirpath, pattern='*')=}")
+
+
+from nltk.corpus import wordnet
+import itertools
+
+
+class wn(object):
+    """WordNet stuff"""
+
+    def __init__(self, drop_mwe=True):
+        self.drop_mwe = drop_mwe
+
+    @staticmethod
+    def _get_syn_ant(word):
+        """get synonyms (and antonyms)
+
+        this fn works in python 3.8 and 3.9"""
+        synonyms = []
+        antonyms = []
+
+        for syn in wordnet.synsets(str(word)):
+            for l in syn.lemmas():
+                synonyms.append(l.name())
+                if l.antonyms():
+                    antonyms.append(l.antonyms()[0].name())
+
+        synonyms = sorted(set(synonyms))
+        antonyms = sorted(set(antonyms))
+
+        return {"synonyms": synonyms, "antonyms": antonyms}
+
+    def _syn_method1(self, word):
+        """Get synoyms for a word."""
+        syn = self._get_syn_ant(word)["synonyms"]
+        synonyms = sorted(set(syn))
+        if self.drop_mwe:
+            synonyms = [el for el in synonyms if "_" not in el]
+        synonyms = [el.replace("_", " ") for el in synonyms]
+        return sorted(synonyms)
+
+    def _syn_method2(self, word):
+        """Get synoyms for a word. NOTE: use diff conda env, based on
+        environment.wn.yml and requirements.wn.txt, with python 3.9
+
+        This fn does NOT work in python 3.8"""
+        # synonyms fn is available in wordnet with python 3.9, but not 3.8
+        syn = wordnet.synonyms(word)
+        # this returned a multidimensional list (for different meanings of the
+        # word), now we need to flatten it
+        syn = list(itertools.chain(*syn))
+        synonyms = sorted(set(syn))
+        if self.drop_mwe:
+            synonyms = [el for el in synonyms if "_" not in el]
+        synonyms = [el.replace("_", " ") for el in synonyms]
+        return sorted(synonyms)
+
+    def syn(self, *args, **kwargs):
+        return self._syn_method1(*args, **kwargs)
+
+    def make_syn_files(self, targets_file="", outfiles_dir=""):
+        wordlist = bert._read_wordlist_from_file(targets_file)
+        outfiles_dir = Path(outfiles_dir)
+        for w in wordlist:
+            syn_list = self._syn_method1(w)
+            outfile_path = (outfiles_dir / f"{w}.txt").resolve()
+            logger.info(f"Writing: {outfile_path=}")
+            _write_list_to_file(syn_list, outfile_path)
+
+
+def _write_list_to_file(input_list, outfile_path):
+    outfile_path = Path(outfile_path).resolve()
+    with open(outfile_path, "w", encoding="utf8") as f:
+        f.writelines(
+            "\n".join(input_list)
+        )  # writelines() does not append its own newlines
+    # logger.debug(f"file is now at {outfile_path=}")
 
 
 @logger.catch
