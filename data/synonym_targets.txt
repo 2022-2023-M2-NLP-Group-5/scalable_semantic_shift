@@ -1,0 +1,12 @@
+atom
+women
+men
+gay
+chair
+table
+Germany
+Italy
+France
+England
+Japan
+United States
