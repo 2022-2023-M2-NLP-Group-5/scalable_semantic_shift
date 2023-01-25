@@ -1049,6 +1049,7 @@ class wn(object):
         return self._syn_method1(*args, **kwargs)
 
     def make_syn_files(self, targets_file="", outfiles_dir=""):
+        logger.debug(f"{_file_info_digest(targets_file)=}")
         wordlist = bert._read_wordlist_from_file(targets_file)
         outfiles_dir = Path(outfiles_dir)
         for w in wordlist:
