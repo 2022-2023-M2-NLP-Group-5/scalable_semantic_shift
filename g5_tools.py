@@ -6,6 +6,8 @@ already set up, then you just need some of these commands):
 
 oarsub -I -p "cluster='gemini'" -l gpu=1,walltime=1:00  -t exotic  # lyon
 
+# best clusters for gpus on nancy: grue, gruss and graffiti
+
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
 bash Mambaforge-$(uname)-$(uname -m).sh
 
@@ -27,9 +29,9 @@ import os
 from pathlib import Path
 import shutil
 import hashlib
-import contextlib  # with contextlib.redirect_stdout(stream_stdout), contextlib.redirect_stderr(stream_stderr)
-
+import contextlib
 import time
+from collections import namedtuple
 
 from numpy import mean
 import pandas as pd
@@ -41,23 +43,28 @@ import filehash
 
 filehasher = filehash.FileHash()
 
-try:
-    from loguru import logger
+if __name__ == "__main__":
+    try:
+        from loguru import logger
 
-    logger.remove()
-    # https://loguru.readthedocs.io/en/stable/api/logger.html?#loguru._logger.Logger.add
-    LOGGER_FORMAT = "<green>{time:MM-DD HH:mm:ss.SSS}</green> | <level>{elapsed}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-    # fmt: off
-    logger.add( sys.stderr, backtrace=True, diagnose=True, format=LOGGER_FORMAT )
-    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log", retention="6 months", format=LOGGER_FORMAT, colorize=True, )
-    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.txt",  retention="6 months", format=LOGGER_FORMAT, colorize=False, )
-    logger.add( "logs/{time:YYYY-MM-DD}/g5.{time}.loguru.log.json", retention="6 months", format=LOGGER_FORMAT, colorize=False, serialize=True, )
-    # fmt: on
-    logger.debug(f"{LOGGER_FORMAT=}")
-except ModuleNotFoundError:
-    import logging as logger
+        logger.remove()
+        # https://loguru.readthedocs.io/en/stable/api/logger.html?#loguru._logger.Logger.add
+        LOGGER_FORMAT = "<green>{time:MM-DD HH:mm:ss.SSS}</green> | <level>{elapsed}</level> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+        # dt = dt.format('YYYY-MM-DD HH:mm:ss')
+        timestamp = pendulum.now()  # .format()
+        logfile = f"g5.{timestamp}.loguru"
+        # fmt: off
+        logger.add( sys.stderr, backtrace=True, diagnose=True, format=LOGGER_FORMAT )
+        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".log", retention="6 months", format=LOGGER_FORMAT, colorize=True, )
+        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".txt",  retention="6 months", format=LOGGER_FORMAT, colorize=False, )
+        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".json", retention="6 months", format=LOGGER_FORMAT, colorize=False, serialize=True, )
+        # fmt: on
+        logger.debug(f"Our logs will be named ...{logfile}...")
+        logger.debug(f"{LOGGER_FORMAT=}")
+    except ModuleNotFoundError:
+        import logging as logger
 
-    logger.warning("Did not find `loguru` module, defaulting to `logging`")
+        logger.warning("Did not find `loguru` module, defaulting to `logging`")
 
 DEFAULT_DATA_ROOT_DIR = Path("data/")
 
@@ -66,12 +73,13 @@ class _StreamToLogger:
     """Using this class to capture and log stderr and stdout output from subcommands.
     See: https://loguru.readthedocs.io/en/stable/resources/recipes.html#capturing-standard-stdout-stderr-and-warnings"""
 
-    def __init__(self, level="INFO"):
+    def __init__(self, level="INFO", prefix=""):
         self._level = level
+        self._prefix = prefix
 
     def write(self, buffer):
         for line in buffer.rstrip().splitlines():
-            logger.opt(depth=1).log(self._level, line.rstrip())
+            logger.opt(depth=1).log(self._level, str(self._prefix) + line.rstrip())
 
     def flush(self):
         pass
@@ -83,19 +91,23 @@ class _StreamToLogger:
         pass
 
 
-_stream_stdout = _StreamToLogger(level="SUCCESS")
-_stream_stderr = _StreamToLogger(level="WARNING")
+_stream_stdout = _StreamToLogger(level="INFO", prefix="<STDOUT> ")
+_stream_stderr = _StreamToLogger(level="INFO", prefix="<STDERR> ")
+_redirect_stdout = contextlib.redirect_stdout(_stream_stdout)
+_redirect_stderr = contextlib.redirect_stderr(_stream_stderr)
 
 
 def _print_log(c_err: sarge.Capture, c_out: sarge.Capture, cmd_label: str):
     stderr_msg = c_err.readline()
     stdout_msg = c_out.readline()
     if len(stderr_msg) > 0:
-        log_line = (cmd_label, "stderr", stderr_msg)
-        print(log_line, file=sys.stderr, end="")
+        StdErr = namedtuple("StdErr", ["l", "m"])
+        log_line = StdErr(l=cmd_label, m=stderr_msg)
+        logger.info(f"{log_line}")
     if len(stdout_msg) > 0:
-        log_line = (cmd_label, "stdout", stdout_msg)
-        print(log_line, file=sys.stdout, end="")
+        StdOut = namedtuple("StdOut", ["l", "m"])
+        log_line = StdOut(l=cmd_label, m=stdout_msg)
+        logger.info(f"{log_line}")
 
 
 def _run_cmd(
@@ -125,13 +137,16 @@ def _run_cmd(
         _print_log(c_err, c_out, cmd_label)
 
     p.wait()  # seems to run the same without this
-    logger.debug("Detected that the subprocess is ending...")
+    # logger.debug("Detected that the subprocess is ending...")
 
-    logger.debug(
-        f"We need to catch any output that we were too slow to catch before... continuing to monitor output for {extra_wait_for_secs=}"
-    )
-    # https://stackoverflow.com/questions/24374620/python-loop-to-run-for-certain-amount-of-seconds
+    if extra_wait_for_secs > 0.01:
+        logger.debug(
+            f"We need to catch any output that we were too slow to catch before... continuing to monitor output for {extra_wait_for_secs=}"
+        )
     end_time = time.monotonic() + extra_wait_for_secs
+    # This while loop is outside the if clause on purpose, otherwise we may
+    # miss near-instantaneous output like from git.
+    # https://stackoverflow.com/questions/24374620/python-loop-to-run-for-certain-amount-of-seconds
     while time.monotonic() < end_time:
         _print_log(c_err, c_out, cmd_label)
 
@@ -155,15 +170,18 @@ def sha256sum(filepath):
         return sha256_hash.hexdigest()
 
 
-def _hash_file_maybe(filepath, max_filesize: int = 500_000_000):
-    # https://flaviocopes.com/python-get-file-details/
+def _hash_file_maybe(
+    filepath,
+    max_filesize: int = 1_000_000_000,  # 1 gb
+):
+    """Calculate a checksum of a file unless the file is too big and it will take too long."""
+    # 1gb takes ~1.9 seconds to hash on my system. The BERT model *.bin files are 682 mb.
     full_digest, partial_digest = None, None
+    # how to get file size https://flaviocopes.com/python-get-file-details/
     if os.path.getsize(filepath) <= max_filesize:
         full_digest = sha256sum(filepath)
     else:
-        logger.warning(
-            f"not hashing full file because filesize exceeds {max_filesize=}"
-        )
+        logger.debug(f"not hashing full file because filesize exceeds {max_filesize=}")
         # TBD implement partial digest of first XX bytes of large file
         partial_digest = None
     return {"full_digest": full_digest, "partial_digest": partial_digest}
@@ -171,7 +189,7 @@ def _hash_file_maybe(filepath, max_filesize: int = 500_000_000):
 
 def _file_info_digest(filepath):
     filepath_arg = filepath
-    filepath_abs = Path(filepath).resolve()
+    filepath_abs = str(Path(filepath).resolve())
     digest = _hash_file_maybe(filepath_abs)
     fileinfo = os.stat(filepath_abs)
     results = {
@@ -211,6 +229,7 @@ def setup_punkt():
 
 
 def _token_id(input_string: str) -> str:
+    # TBD hash also the contents of files
     unique_hash_id = hashlib.sha256(str(input_string).encode()).hexdigest()
     # just a token ending, use it combined with timestamp to avoid collisions
     unique_hash_id = unique_hash_id[:6]
@@ -326,7 +345,10 @@ class coha(object):
             setup_punkt()
 
         # this import needs punkt already downloaded in order to succeed
-        from build_coha_corpus import build_train_test, build_data_sets
+        from build_coha_corpus import (
+            build_train_test,
+            build_data_sets,
+        )  # TBD when used, wrap with contextlib
 
         # First we setup all our paths that we will use, without modifying anything on disk yet...
 
@@ -383,7 +405,8 @@ class coha(object):
             # This function outputs json files. For COHA, these files are what
             # get_embeddings_scalable.get_slice_embeddings fn expects.
             logger.info("Running `build_data_sets()` to make json files...")
-            build_data_sets(input_folders, json_output_files)
+            with _redirect_stdout, _redirect_stderr:
+                build_data_sets(input_folders, json_output_files)
 
         if do_txt:
             logger.info(
@@ -396,7 +419,8 @@ class coha(object):
                 logger.debug(f"{lm_output_train=}, {lm_output_test=}")
                 lm_output_train.parent.mkdir(exist_ok=True, parents=True)
                 lm_output_test.parent.mkdir(exist_ok=True)
-                build_train_test([infolder], lm_output_train, lm_output_test)
+                with _redirect_stdout, _redirect_stderr:
+                    build_train_test([infolder], lm_output_train, lm_output_test)
 
     @classmethod
     def prep_slices(cls, *slices):
@@ -508,11 +532,10 @@ class bert(object):
         _run_cmd(cmd, cmd_label="fine-tune_BERT.py", extra_wait_for_secs=5)
 
     @staticmethod
-    def read_wordlist_from_file(input_path) -> list:
+    def _read_wordlist_from_file(input_path) -> list:
         """This fn expects a text file with one word per line. It will work on
         data/semeval2020_ulscd_ger/targets.txt ; but not on the English semeval target
         file (English one is different format, it includes POS suffixes).
-
         """
         targets_list = []
         with open(input_path, "r", encoding="utf8") as f:
@@ -520,7 +543,33 @@ class bert(object):
                 target = line.strip()
                 targets_list.append(target)
         logger.debug(f"{len(targets_list)=}")
-        return sorted(set(targets_list))
+        wordlist = sorted(set(targets_list))
+        for w in wordlist:
+            if "_" in w:
+                logger.error(
+                    "Detected an underscore inside a word. "
+                    "Did you run this on SemEval Eng targets.txt? "
+                    "Instead you must first use `make_wordlistfile_from_semeval_eng_targets_txt()` to create a wordlist.txt."
+                )
+        return wordlist
+
+    @staticmethod
+    def make_wordlistfile_from_semeval_eng_targets_txt(
+        targets_txt_path="data/semeval2020_ulscd_eng/targets.txt",
+        outfile_path="data/semeval2020_ulscd_eng/wordlist.txt",
+    ):
+        targets_list = []
+        with open(targets_txt_path, "r", encoding="utf8") as f:
+            for line in f:
+                target = line.strip()
+                target_no_pos = target[:-3]
+                targets_list.append(target_no_pos)
+        outfile_path = Path(outfile_path).resolve()
+        with open(outfile_path, "w", encoding="utf8") as f:
+            f.writelines(
+                "\n".join(targets_list)
+            )  # writelines() does not append its own newlines
+        logger.info(f"Semeval english wordlist file is now at {outfile_path=}")
 
     @staticmethod
     def _get_gulordava_dict():
@@ -534,8 +583,8 @@ class bert(object):
 
         whereas get_shifts() expects the Gulordava csv file, and gets its list of words from there.
         """
-        # from get_embeddings_scalable import get_shifts # Gulordava csv
-        # from get_embeddings_scalable_semeval import get_targets # SemEval targets file
+        # from get_embeddings_scalable import get_shifts # Gulordava csv # TBD: when used, wrap with contextlib
+        # from get_embeddings_scalable_semeval import get_targets # SemEval targets file # TBD: when used, wrap with contextlib
 
         # wget https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
         GULORDAVA_FILEPATH = (
@@ -559,8 +608,9 @@ class bert(object):
     ) -> list:
         # gulordava_wordlist = list(cls._get_gulordava_dict().keys())
         # wordlist = SEMEVAL_WORDLIST + gulordava_wordlist
+        logger.debug(f"{path=}")
 
-        wordlist = cls.read_wordlist_from_file(input_path=path)
+        wordlist = cls._read_wordlist_from_file(input_path=path)
 
         wordlist = sorted(list(set(wordlist)))
         # wordlist = wordlist[:3]  # for testing
@@ -592,19 +642,20 @@ class bert(object):
             mockup_dict[w] = 42
         return mockup_dict
 
-    @classmethod
-    def _get_mockup_dict_for_extract_query(cls):
-        mockup_dict = cls._make_mockup_dict_from_wordlist(
-            cls._get_wordlist_for_extract_query()
-        )
-        logger.debug(f"{mockup_dict=}")
-        return mockup_dict
+    # @classmethod
+    # def _get_mockup_dict_for_extract_query(cls):
+    #     mockup_dict = cls._make_mockup_dict_from_wordlist(
+    #         cls._get_wordlist_for_extract_query()
+    #     )
+    #     logger.debug(f"{mockup_dict=}")
+    #     return mockup_dict
 
     @classmethod
     def extract(
         cls,
-        pathToFineTunedModel: str = "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
+        pathToFineTunedModel: str = "data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset: str = "data/outputs/1910/full_text.json.txt",
+        wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
         embeddings_path=None,
         gpu=True,
     ):
@@ -623,13 +674,18 @@ class bert(object):
         logger.info("Working with the following input parameters...")
         logger.info(f"{pathToFineTunedModel=}")
         logger.info(f"{dataset=}")
+        logger.info(f"{wordlist_path=}")
         logger.info(f"{gpu=}")
 
-        logger.info(f"{_file_info_digest(dataset)=}")
+        logger.debug(f"{_file_info_digest(pathToFineTunedModel)=}")
+        logger.debug(f"{_file_info_digest(dataset)=}")
+        logger.debug(f"{_file_info_digest(wordlist_path)=}")
 
         import torch
         from transformers import BertTokenizer, BertModel
-        from get_embeddings_scalable import get_slice_embeddings
+        from get_embeddings_scalable import (
+            get_slice_embeddings,
+        )  # TBD: when used, wrap with contextlib
 
         batch_size = 16
         max_length = 256
@@ -656,9 +712,9 @@ class bert(object):
 
         """# embeddings_path: is path to output the embeddings file"""
         if embeddings_path is None:
-            # dt = dt.format('YYYY-MM-DD HH:mm:ss')
             dt = pendulum.now().format("MM-DD_HH\hmm")
             stamp = dt + "_" + _token_id(pathToFineTunedModel + dataset)
+            # TBD factor out _stamp() into its own fn (and use it with unattended runs)
             embeddings_path = (
                 DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slices[0]}.pickle"
             )
@@ -701,7 +757,12 @@ class bert(object):
         if task == "coha":
             lang = "English"
             # shifts_dict = get_shifts(args.target_path)
-            shifts_dict = cls._get_mockup_dict_for_extract_query()
+            # shifts_dict = cls._get_mockup_dict_for_extract_query()
+
+            shifts_dict = cls._make_mockup_dict_from_wordlist(
+                cls._get_wordlist_for_extract_query(path=wordlist_path)
+            )
+            logger.debug(f"{shifts_dict=}")
 
         # elif task == 'aylien':
         #     lang = 'English'
@@ -772,20 +833,20 @@ class bert(object):
         logger.info("Now running get_slice_embeddings()...")
         embeddings_path.parent.mkdir(exist_ok=True)
         embeddings_path = str(embeddings_path)
-        # with contextlib.redirect_stdout(stream_stdout), contextlib.redirect_stderr(stream_stderr):
-        get_slice_embeddings(
-            embeddings_path,
-            datasets,
-            tokenizer,
-            model,
-            batch_size,
-            max_length,
-            lang,
-            shifts_dict,
-            task,
-            slices,
-            gpu=gpu,
-        )
+        with _redirect_stdout, _redirect_stderr:
+            get_slice_embeddings(
+                embeddings_path,
+                datasets,
+                tokenizer,
+                model,
+                batch_size,
+                max_length,
+                lang,
+                shifts_dict,
+                task,
+                slices,
+                gpu=gpu,
+            )
 
         logger.info(f"Output embeddings pickle should now be at: {embeddings_path=}")
         logger.debug(f"{_file_info_digest(embeddings_path)=}")
@@ -809,7 +870,8 @@ class bert(object):
 class eval(object):
     @staticmethod
     def _filter_results_file_with_wordlist(
-        results_filepath: str, filter_list: list = SEMEVAL_WORDLIST
+        results_filepath: str,
+        filter_list: list = SEMEVAL_WORDLIST,  # TBD implement german wordlist/wordlist from a file
     ):
         results_filepath = str(Path(results_filepath).resolve())
         logger.info(f"Reading results from {results_filepath=}")
@@ -824,7 +886,7 @@ class eval(object):
     @classmethod
     def filter_results(
         cls, results_filepath: str, filter_type: str = "semeval", out_filepath=""
-    ):
+    ):  # TBD implement german semeval
         if filter_type == "semeval":
             filter_list = SEMEVAL_WORDLIST
         elif filter_type == "gulordava":
@@ -930,37 +992,27 @@ class run(object):
 
 
 @logger.catch
-def main():
+def _main():
     logger.debug(f"CLI invocation argument list: {sys.argv=}")
     logger.debug(f"{sys.flags=}")
-    with contextlib.redirect_stdout(_stream_stdout), contextlib.redirect_stderr(
-        _stream_stderr
-    ):
-        print("NOTE: Standard output (stdout) is sent to added handlers, like so.")
-        print(
-            "NOTE: Standard error  (stderr) is sent to added handlers, like so.",
-            file=sys.stderr,
-        )
-        GIT_CMDS = [
-            "git rev-parse HEAD",
-            "git show --no-patch --oneline",
-            "git status --porcelain=v2 --branch -z",
-        ]
-        for cmd in GIT_CMDS:
-            _run_cmd(cmd, cmd_label=cmd, extra_wait_for_secs=0)
-
-        # Note that with Fire in here, fire can never print to stdout (this
-        # even messes up the Fire autogenerated help pages). If we ever decide
-        # we have a legitimate reason to print to stdout (for example we want
-        # to redirect to a file with >), then we can move the context mgr to
-        # each spot where we call out to an external fn/cmd, rather than having
-        # it centralized here.
-        fire.Fire()
-        # The upside of doing this centrally here is that we will be able to
-        # catch *all* the output that any subcommands try to send, and log it
-        # for reference.
+    # with contextlib.redirect_stdout(_stream_stdout), contextlib.redirect_stderr(
+    #     _stream_stderr
+    # ):
+    #     print("NOTE: Standard output (stdout) is sent to added handlers, like so.")
+    #     print(
+    #         "NOTE: Standard error  (stderr) is sent to added handlers, like so.",
+    #         file=sys.stderr,
+    #     )
+    GIT_CMDS = [
+        "git rev-parse HEAD",
+        "git show --no-patch --oneline",
+        "git status --porcelain=v2 --branch -z",
+    ]
+    for cmd in GIT_CMDS:
+        _run_cmd(cmd, cmd_label=cmd, extra_wait_for_secs=0)
+    fire.Fire()
     logger.debug("end of script")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_main())
