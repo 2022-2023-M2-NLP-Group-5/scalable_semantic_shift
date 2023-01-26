@@ -691,8 +691,8 @@ class bert(object):
     @classmethod
     def extract(
         cls,
-        pathToFineTunedModel: str = "data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
-        dataset: str = "data/outputs/1910/full_text.json.txt",
+        pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
+        dataset="data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
         embeddings_path=None,  # tbd change this to empty string
         gpu=True,
@@ -921,10 +921,14 @@ class bert(object):
             lang=lang,
         )
 
+        coha.build_corpus(filtered_dataset_dirpath, do_txt=False, do_json=True)
+
         logger.info("now extracting pickle")
+        dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
+        logger.debug(f"{dataset_json=}")
         cls.extract(
             pathToFineTunedModel=pathToFineTunedModel,
-            dataset=filtered_dataset_txt_filepath,
+            dataset=dataset_json,
             wordlist_path=wordlist_path,
         )
 
@@ -933,7 +937,7 @@ class bert(object):
         # def loop_extract(cls, model_dataset_pairs_pathlist: list[tuple], *kwargs):
         # '''operate on paths'''
         for model_path, dataset_path in model_dataset_pairs_pathlist:
-            logger.info(f'Running extraction for: {model_path=}, {dataset_path=}')
+            logger.info(f"Running extraction for: {model_path=}, {dataset_path=}")
             cls.extract(
                 pathToFineTunedModel=model_path,  # "data/averie_bert_training_c1/pytorch_model.bin",
                 dataset=dataset_path,  # "data/outputs/1910/full_text.json.txt",
