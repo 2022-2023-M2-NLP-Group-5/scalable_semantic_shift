@@ -264,9 +264,9 @@ def _token_id(items_to_hash) -> str:
     return unique_hash_id
 
 
-def _stamp(items_to_hash, dt_format="MM-DD_HH\hmm"):
+def _stamp(items_to_hash, dt_format="MM-DD_HH:mm:ss"):
     dt = pendulum.now().format(dt_format)
-    stamp = dt + "_" + _token_id(items_to_hash)
+    stamp = dt + "_<" + _token_id(items_to_hash) + ">"
     return stamp
 
 
@@ -695,6 +695,7 @@ class bert(object):
     @classmethod
     def extract(
         cls,
+        slice_label: str,
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset="data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
@@ -748,7 +749,8 @@ class bert(object):
         # datasets = args.corpus_paths.split(';')
 
         datasets = [dataset]
-        slices = [str(Path(dataset).parent.stem)]
+        slices = [slice_label]
+        # slices = [str(Path(dataset).parent.stem)]
 
         logger.info(f"{datasets=} ; {slices=}")
 
@@ -898,6 +900,7 @@ class bert(object):
     @classmethod
     def filter_dataset_and_extract(
         cls,
+        slice_label: str,
         corpus_filepath="data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",  # full, original source dataset, in a single txt file, to be filtered
         lang="english",
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
@@ -916,7 +919,9 @@ class bert(object):
 
         base_working_dirpath = (
             DEFAULT_DATA_ROOT_DIR
-            / "AUTOTEST"
+            # / "AUTOTEST"
+            / "corpus"
+            / "filtered"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
         filtered_dataset_dirpath = base_working_dirpath / "filtered"
@@ -950,18 +955,22 @@ class bert(object):
         dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
         logger.debug(f"{dataset_json=}")
         cls.extract(
+            slice_label=slice_label,
             pathToFineTunedModel=pathToFineTunedModel,
             dataset=dataset_json,
             wordlist_path=wordlist_path,
         )
 
     @classmethod
-    def loop_extract(cls, model_dataset_pairs_pathlist: list, wordlist_path):
+    def loop_extract(cls, list_of_slice_model_dataset_tuples: list, wordlist_path):
         # def loop_extract(cls, model_dataset_pairs_pathlist: list[tuple], *kwargs):
         # '''operate on paths'''
-        for model_path, dataset_path in model_dataset_pairs_pathlist:
-            logger.info(f"Running extraction for: {model_path=}, {dataset_path=}")
+        for slice_label, model_path, dataset_path in list_of_slice_model_dataset_tuples:
+            logger.info(
+                f"Running extraction for: {slice_label=}, {model_path=}, {dataset_path=}"
+            )
             cls.extract(
+                slice_label=slice_label,
                 pathToFineTunedModel=model_path,  # "data/averie_bert_training_c1/pytorch_model.bin",
                 dataset=dataset_path,  # "data/outputs/1910/full_text.json.txt",
                 wordlist_path=wordlist_path,  # "data/semeval2020_ulscd_eng/wordlist.txt",
@@ -976,10 +985,12 @@ class bert(object):
         args = [
             # ("model", "dataset"),
             (
+                "c1_test",
                 "data/outputs/bert_en_de_c1/pytorch_model.bin",
                 "data/outputs/c1/full_text.json.txt",
             ),
             (
+                "c2_test",
                 "data/outputs/bert_en_de_c2/pytorch_model.bin",
                 "data/outputs/c2/full_text.json.txt",
             ),
@@ -1064,6 +1075,7 @@ class run(object):
 
     @staticmethod
     def train_extract(
+        slice_label: str,
         train=TESTING_BERT_TRAINTXT_PATH,  # 'data/c2_corpus_out/train.txt',
         test=TESTING_BERT_TESTTXT_PATH,  # 'data/c2_corpus_out/test.txt',
         full_text_json=TESTING_BERT_FULLTEXTJSON_PATH,  # 'data/cohasem_corpus2/full_text.json.txt',
@@ -1113,6 +1125,7 @@ class run(object):
         embeddings_out_filepath = (unattended_run_dirpath / f"{slice}.pickle").resolve()
 
         bert.extract(
+            slice_label=slice_label,
             pathToFineTunedModel=str(train_output_dir / "pytorch_model.bin"),
             dataset=full_text_json,
             gpu=True,
