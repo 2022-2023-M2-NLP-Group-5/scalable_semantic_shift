@@ -160,6 +160,27 @@ def _run_cmd(
             )
 
 
+def reduce_corpus(
+    corpus_filepath="data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
+    target_filepath="data/wordlists/synonyms/no_mwe/bag.txt",
+    output_filepath="data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
+    lang="english",
+):
+    """
+    python reduce_corpus.py --corpus_filepath 'data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt' --target_filepath 'data/wordlists/synonyms/no_mwe/bag.txt' --output_filepath 'data/syn/c1/c1_EN_reduced.txt' --lang english"""
+    cmd = (
+        "python reduce_corpus.py  "
+        "--corpus_filepath {}  "
+        "--target_filepath {}  "
+        "--output_filepath {}  "
+        "--lang {}  "
+    )
+    cmd = sarge.shell_format(
+        cmd, corpus_filepath, target_filepath, output_filepath, lang
+    )
+    _run_cmd(cmd, cmd_label=cmd.split(" ")[1])
+
+
 def sha256sum(filepath):
     """https://www.quickprogrammingtips.com/python/how-to-calculate-sha256-hash-of-a-file-in-python.html"""
     sha256_hash = hashlib.sha256()
@@ -228,12 +249,25 @@ def setup_punkt():
     nltk.download("punkt")
 
 
-def _token_id(input_string: str) -> str:
-    # TBD hash also the contents of files
-    unique_hash_id = hashlib.sha256(str(input_string).encode()).hexdigest()
-    # just a token ending, use it combined with timestamp to avoid collisions
+def _token_id(items_to_hash) -> str:
+    """each item is probably a path or other type of string"""
+    # TODO hash also the contents of files?
+    hashes_list = []
+    for item in items_to_hash:
+        hash = hashlib.sha256(str(item).encode()).hexdigest()
+        hashes_list.append(hash)
+    hashes_list = sorted(hashes_list)  # we want to sort, but we do NOT want to dedup
+    hashes_summary = "".join(hashes_list)
+    unique_hash_id = hashlib.sha256(str(hashes_summary).encode()).hexdigest()
     unique_hash_id = unique_hash_id[:6]
+    # just a token ending, use it combined with timestamp to avoid collisions
     return unique_hash_id
+
+
+def _stamp(items_to_hash, dt_format="MM-DD_HH\hmm"):
+    dt = pendulum.now().format(dt_format)
+    stamp = dt + "_" + _token_id(items_to_hash)
+    return stamp
 
 
 def _freeze_hashdeep_rel(
@@ -341,14 +375,17 @@ class coha(object):
         """Wrapper alternative to simplify the argparse version in the original build_coha_corpus.py."""
         logger.debug(f"{do_txt=}, {do_json=}")
 
+        # TODO add more file info digest into this fn. Also, display where the output paths are clearly in logs.
+
         if __name__ == "__main__":
+            # Punkt tokenizer is used by build_coha_corpus.py
             setup_punkt()
 
         # this import needs punkt already downloaded in order to succeed
         from build_coha_corpus import (
             build_train_test,
             build_data_sets,
-        )  # TBD when used, wrap with contextlib
+        )
 
         # First we setup all our paths that we will use, without modifying anything on disk yet...
 
@@ -558,11 +595,12 @@ class bert(object):
         targets_txt_path="data/semeval2020_ulscd_eng/targets.txt",
         outfile_path="data/semeval2020_ulscd_eng/wordlist.txt",
     ):
+        logger.debug(f"{targets_txt_path=}")
         targets_list = []
         with open(targets_txt_path, "r", encoding="utf8") as f:
             for line in f:
                 target = line.strip()
-                target_no_pos = target[:-3]
+                target_no_pos = target[:-3]  # remove POS endings like: _nn
                 targets_list.append(target_no_pos)
         outfile_path = Path(outfile_path).resolve()
         with open(outfile_path, "w", encoding="utf8") as f:
@@ -583,8 +621,8 @@ class bert(object):
 
         whereas get_shifts() expects the Gulordava csv file, and gets its list of words from there.
         """
-        # from get_embeddings_scalable import get_shifts # Gulordava csv # TBD: when used, wrap with contextlib
-        # from get_embeddings_scalable_semeval import get_targets # SemEval targets file # TBD: when used, wrap with contextlib
+        # from get_embeddings_scalable import get_shifts # Gulordava csv # NOTE: when used, wrap with contextlib
+        # from get_embeddings_scalable_semeval import get_targets # SemEval targets file # NOTE: when used, wrap with contextlib
 
         # wget https://marcobaroni.org/PublicData/gulordava_GEMS_evaluation_dataset.csv
         GULORDAVA_FILEPATH = (
@@ -656,8 +694,10 @@ class bert(object):
         pathToFineTunedModel: str = "data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset: str = "data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
-        embeddings_path=None,
+        embeddings_path=None,  # tbd change this to empty string
         gpu=True,
+        batch_size=16,
+        max_length=256,
     ):
         """
                 Wraps get_embeddings_scalable.py.
@@ -683,13 +723,11 @@ class bert(object):
 
         import torch
         from transformers import BertTokenizer, BertModel
-        from get_embeddings_scalable import (
-            get_slice_embeddings,
-        )  # TBD: when used, wrap with contextlib
+        from get_embeddings_scalable import get_slice_embeddings
 
-        batch_size = 16
-        max_length = 256
-        logger.debug(f"hardcoded: {batch_size=}, {max_length=}")
+        # batch_size = 16
+        # max_length = 256
+        logger.debug(f"{batch_size=}, {max_length=}")
 
         # slices = args.corpus_slices.split(';')
 
@@ -712,9 +750,7 @@ class bert(object):
 
         """# embeddings_path: is path to output the embeddings file"""
         if embeddings_path is None:
-            dt = pendulum.now().format("MM-DD_HH\hmm")
-            stamp = dt + "_" + _token_id(pathToFineTunedModel + dataset)
-            # TBD factor out _stamp() into its own fn (and use it with unattended runs)
+            stamp = _stamp([pathToFineTunedModel, dataset], dt_format="MM-DD_HH\hmm")
             embeddings_path = (
                 DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slices[0]}.pickle"
             )
@@ -855,6 +891,74 @@ class bert(object):
             f"{filehasher.hash_dir(DEFAULT_DATA_ROOT_DIR, pattern='*')=}"
         )  # TBD move this to where hashing a dir makes sense
 
+    @classmethod
+    def filter_dataset_and_extract(
+        cls,
+        corpus_filepath="data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",  # full, original source dataset, in a single txt file, to be filtered
+        lang="english",
+        pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
+        # dataset="data/outputs/1910/full_text.json.txt", # leftover cruft from copying from another fn definition
+        wordlist_path="data/wordlists/synonyms/no_mwe/bag.txt",  # "data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
+        embeddings_path=None,  # tbd change this to empty string
+        gpu=True,
+        filter_dataset: bool = True,
+        batch_size=16,
+        max_length=256,
+    ):
+        logger.info(f"{corpus_filepath=}")
+        logger.info(f"{lang=}")
+        logger.info(f"{pathToFineTunedModel=}")
+        logger.info(f"{wordlist_path=}")
+
+        filtered_dataset_dirpath = DEFAULT_DATA_ROOT_DIR / "syn" / "AUTOTEST"
+        filtered_dataset_txt_filepath = filtered_dataset_dirpath / "blarg.txt"
+
+        logger.info("now reducing corpus")
+        reduce_corpus(
+            corpus_filepath=corpus_filepath,  # "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
+            target_filepath=wordlist_path,  # "data/wordlists/synonyms/no_mwe/bag.txt",
+            output_filepath=filtered_dataset_txt_filepath,  # "data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
+            lang=lang,
+        )
+
+        logger.info("now extracting pickle")
+        cls.extract(
+            pathToFineTunedModel=pathToFineTunedModel,
+            dataset=filtered_dataset_dirpath,
+            wordlist_path=wordlist_path,
+        )
+
+    @classmethod
+    def loop_extract(cls, model_dataset_pairs_pathlist: list, wordlist_path):
+        # def loop_extract(cls, model_dataset_pairs_pathlist: list[tuple], *kwargs):
+        # '''operate on paths'''
+        for model_path, dataset_path in model_dataset_pairs_pathlist:
+            cls.extract(
+                pathToFineTunedModel=model_path,  # "data/averie_bert_training_c1/pytorch_model.bin",
+                dataset=dataset_path,  # "data/outputs/1910/full_text.json.txt",
+                wordlist_path=wordlist_path,  # "data/semeval2020_ulscd_eng/wordlist.txt",
+            )
+
+            # embeddings_path=None,
+
+            # *kwargs,
+
+    @classmethod
+    def test_le(cls):
+        args = [
+            # ("model", "dataset"),
+            (
+                "data/outputs/bert_en_de_c1/pytorch_model.bin",
+                "data/outputs/c1/full_text.json.txt",
+            ),
+            (
+                "data/outputs/bert_en_de_c2/pytorch_model.bin",
+                "data/outputs/c2/full_text.json.txt",
+            ),
+        ]
+        wordlist_path = "data/wordlists/synonyms/no_mwe/bag.txt"
+        cls.loop_extract(args, wordlist_path=wordlist_path)
+
     @staticmethod
     def measure():
         """
@@ -994,9 +1098,15 @@ class run(object):
 from nltk.corpus import wordnet
 import itertools
 
+# TBD make automatic
+# nltk.download('wordnet')
+# nltk.download('omw-1.4')
+
 
 class wn(object):
-    """WordNet stuff"""
+    """WordNet stuff
+
+    currently on english synonyms implemented; TODO implement german synonyms"""
 
     def __init__(self, drop_mwe=True):
         self.drop_mwe = drop_mwe

@@ -1,3 +1,7 @@
+pink
+blue
+girls
+boys
 atom
 women
 men
