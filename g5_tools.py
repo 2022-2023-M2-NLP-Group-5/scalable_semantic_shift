@@ -924,7 +924,7 @@ class bert(object):
         logger.info("now extracting pickle")
         cls.extract(
             pathToFineTunedModel=pathToFineTunedModel,
-            dataset=filtered_dataset_dirpath,
+            dataset=filtered_dataset_txt_filepath,
             wordlist_path=wordlist_path,
         )
 
@@ -933,6 +933,7 @@ class bert(object):
         # def loop_extract(cls, model_dataset_pairs_pathlist: list[tuple], *kwargs):
         # '''operate on paths'''
         for model_path, dataset_path in model_dataset_pairs_pathlist:
+            logger.info(f'Running extraction for: {model_path=}, {dataset_path=}')
             cls.extract(
                 pathToFineTunedModel=model_path,  # "data/averie_bert_training_c1/pytorch_model.bin",
                 dataset=dataset_path,  # "data/outputs/1910/full_text.json.txt",
