@@ -369,6 +369,7 @@ class coha(object):
     def build_corpus(
         *dirpaths_for_input_slices,
         data_root_dir=DEFAULT_DATA_ROOT_DIR,
+        output_dir="",
         do_txt: bool = True,
         do_json: bool = True,
     ):
@@ -389,8 +390,10 @@ class coha(object):
 
         # First we setup all our paths that we will use, without modifying anything on disk yet...
 
-        data_root_dir = Path(data_root_dir)
-        output_dir = data_root_dir / Path("outputs")
+        # data_root_dir = Path(data_root_dir)
+
+        if output_dir == "":
+            output_dir = data_root_dir / Path("outputs")
 
         dirpaths_for_input_slices = [
             Path(p).resolve() for p in dirpaths_for_input_slices
@@ -399,7 +402,8 @@ class coha(object):
         # NOTE TBD: input_folders and dirpaths_for_input_slices are pretty much
         # the same, we can probably change this to collapse these into one
         # variable
-        input_folders = [Path(dirpath) for dirpath in dirpaths_for_input_slices]
+        # input_folders = [Path(dirpath) for dirpath in dirpaths_for_input_slices]
+        input_folders = dirpaths_for_input_slices
 
         corpus_slice_labels = [
             str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices
@@ -418,14 +422,14 @@ class coha(object):
         ]
 
         logger.debug("Working with the following paths...")
-        for el in [
-            dirpaths_for_input_slices,
-            input_folders,
-            paths_for_lm_output_train,
-            paths_for_lm_output_test,
-            json_output_files,
-        ]:
-            logger.debug(el)
+
+        logger.debug(f"{dirpaths_for_input_slices=}")
+        logger.debug(f"{input_folders=}")
+        logger.debug(f"{paths_for_lm_output_train=}")
+        logger.debug(f"{paths_for_lm_output_test=}")
+        logger.debug(f"{json_output_files=}")
+
+        logger.warning(f"{output_dir=}")
 
         for d in dirpaths_for_input_slices:
             logger.debug(f"{filehasher.hash_dir(d, pattern='*')=}")
@@ -915,10 +919,14 @@ class bert(object):
             / "AUTOTEST"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
-
         filtered_dataset_dirpath = base_working_dirpath / "filtered"
+
+        base_working_dirpath.mkdir(exist_ok=False, parents=True)
+        filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
+
         filtered_dataset_txt_filepath = filtered_dataset_dirpath / "reduced.txt"
 
+        logger.warning(f"{base_working_dirpath=}")
         logger.warning(f"{filtered_dataset_dirpath=}")
         logger.warning(f"{filtered_dataset_txt_filepath=}")
 
@@ -931,7 +939,12 @@ class bert(object):
         )
 
         logger.info("now running coha.build_corpus()")
-        coha.build_corpus(filtered_dataset_dirpath, do_txt=False, do_json=True)
+        coha.build_corpus(
+            filtered_dataset_dirpath,
+            do_txt=False,
+            do_json=True,
+            output_dir=base_working_dirpath,
+        )
 
         logger.info("now extracting pickle")
         dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
