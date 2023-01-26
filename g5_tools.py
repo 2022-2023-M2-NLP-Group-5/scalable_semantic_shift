@@ -899,19 +899,28 @@ class bert(object):
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         # dataset="data/outputs/1910/full_text.json.txt", # leftover cruft from copying from another fn definition
         wordlist_path="data/wordlists/synonyms/no_mwe/bag.txt",  # "data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
-        embeddings_path=None,  # tbd change this to empty string
-        gpu=True,
-        filter_dataset: bool = True,
-        batch_size=16,
-        max_length=256,
+        # embeddings_path=None,  # tbd change this to empty string
+        # gpu=True,
+        # filter_dataset: bool = True,
+        # batch_size=16,
+        # max_length=256,
     ):
         logger.info(f"{corpus_filepath=}")
         logger.info(f"{lang=}")
         logger.info(f"{pathToFineTunedModel=}")
         logger.info(f"{wordlist_path=}")
 
-        filtered_dataset_dirpath = DEFAULT_DATA_ROOT_DIR / "syn" / "AUTOTEST"
-        filtered_dataset_txt_filepath = filtered_dataset_dirpath / "blarg.txt"
+        base_working_dirpath = (
+            DEFAULT_DATA_ROOT_DIR
+            / "AUTOTEST"
+            / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
+        )
+
+        filtered_dataset_dirpath = base_working_dirpath / "filtered"
+        filtered_dataset_txt_filepath = filtered_dataset_dirpath / "reduced.txt"
+
+        logger.warning(f"{filtered_dataset_dirpath=}")
+        logger.warning(f"{filtered_dataset_txt_filepath=}")
 
         logger.info("now reducing corpus")
         reduce_corpus(
@@ -921,6 +930,7 @@ class bert(object):
             lang=lang,
         )
 
+        logger.info("now running coha.build_corpus()")
         coha.build_corpus(filtered_dataset_dirpath, do_txt=False, do_json=True)
 
         logger.info("now extracting pickle")
