@@ -52,7 +52,7 @@ def reduce_corpus(corpus_filepath,
                   "lines that contain stems of the targets. ")
         else:
             new_corpus_len = len(all_lines)
-        f.write("\n".join(all_lines[:new_corpus_len]))
+        f.write("".join(all_lines[:new_corpus_len]))
     print("Number of lines in reduced corpus:", new_corpus_len)
     print("Number of lines in original corpus:", count)
 
