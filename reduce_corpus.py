@@ -11,7 +11,7 @@ def reduce_corpus(corpus_filepath,
                   self_defined_words="",
                   stem_self_defined=False,
                   semeval_eng=False,
-                  keep_size=1):
+                  keep_size=80000):
     corpus = open(corpus_filepath).readlines()
     if lang == "english":
         stemmer = SnowballStemmer("english")
@@ -34,26 +34,21 @@ def reduce_corpus(corpus_filepath,
         target = [w.lower() for w in targets]
 
     print("Querying these words:", target)
-
-    count = 0
+    count = len(corpus)
+    keep = 0
     all_lines = []
     with open(os.path.join(output_filepath), "w") as f:
-        for e, line in enumerate(corpus):
+        for line in corpus:
             # text = {tok if len(tok:= stemmer.stem(word)) < 4 else tok[:-1] for word in set(line.split())}
             text = {x for x in set(line.split()) for i in target if (x.lower().startswith(i))}
-            count += 1
             if len(text) == 0:
                 continue
+            elif keep < keep_size:
+                keep += 1
+                f.write(line)
             else:
-                all_lines.append(line)
-        if keep_size < 1:
-            new_corpus_len = int(keep_size * len(all_lines))
-            print("Keeping", new_corpus_len, "lines out of ", len(all_lines),
-                  "lines that contain stems of the targets. ")
-        else:
-            new_corpus_len = len(all_lines)
-        f.write("".join(all_lines[:new_corpus_len]))
-    print("Number of lines in reduced corpus:", new_corpus_len)
+                break
+    print("Number of lines in reduced corpus:", keep)
     print("Number of lines in original corpus:", count)
 
 
@@ -89,9 +84,9 @@ if __name__ == '__main__':
                         type=bool,
                         help="True only if the targets are from semeval english")
     parser.add_argument("--keep_size",
-                        default=1,
-                        type=float,
-                        help="a value between 0 and 1 to denote the proportion of filtered corpus to keep")
+                        default=80000,
+                        type=int,
+                        help="max lines to keep in the reduced corpus")
     args = parser.parse_args()
 
     reduce_corpus(corpus_filepath = args.corpus_filepath,
