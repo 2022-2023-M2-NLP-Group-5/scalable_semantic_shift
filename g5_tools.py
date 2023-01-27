@@ -38,7 +38,9 @@ import fire
 import pandas as pd
 import pendulum
 import sarge
+import torch
 from numpy import mean
+from transformers import BertModel, BertTokenizer
 
 filehasher = filehash.FileHash()
 
@@ -721,56 +723,43 @@ class bert(object):
 
         """
         logger.info("Working with the following input parameters...")
+
+        logger.info(f"{slice_label=}")
+        logger.info(f"{lang=}")
         logger.info(f"{pathToFineTunedModel=}")
         logger.info(f"{dataset=}")
         logger.info(f"{wordlist_path=}")
         logger.info(f"{gpu=}")
 
+        logger.debug(f"{batch_size=}, {max_length=}")
+
         logger.debug(f"{_file_info_digest(pathToFineTunedModel)=}")
         logger.debug(f"{_file_info_digest(dataset)=}")
         logger.debug(f"{_file_info_digest(wordlist_path)=}")
 
-        import torch
-        from transformers import BertModel, BertTokenizer
-
         from get_embeddings_scalable import get_slice_embeddings
 
-        # batch_size = 16
-        # max_length = 256
-        logger.debug(f"{batch_size=}, {max_length=}")
-
-        # slices = args.corpus_slices.split(';')
-
-        # lang = 'English'
         task = "coha"
-
-        # task = args.task
-
-        # tasks = ['coha', 'aylien', 'durel']
-        # if task not in tasks:
-        #     print("Task not valid, valid choices are: ", ", ".join(tasks))
-        #     sys.exit()
-
-        # datasets = args.corpus_paths.split(';')
-
         datasets = [dataset]
         slices = [slice_label]
-        # slices = [str(Path(dataset).parent.stem)]
 
         logger.info(f"{datasets=} ; {slices=}")
 
         """# embeddings_path: is path to output the embeddings file"""
         if embeddings_path == "":
-            stamp = _stamp([pathToFineTunedModel, dataset])
-            _slice_label = slices[0]
+            stamp = _stamp(
+                [pathToFineTunedModel, dataset]
+            )  # TODO add other items into this list?
+            # _slice_label = slice_label # slices[0]
             embeddings_path = (
-                DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{_slice_label}.pickle"
+                DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slice_label}.pickle"
             )
-        embeddings_path = embeddings_path.resolve()
+        embeddings_path = Path(embeddings_path).resolve()
         logger.info(f"We will output embeddings to file: {embeddings_path=}")
 
         """
         NOTE: These dataset paths correspond to the files output by build_coha_corpus.build_data_sets (for coha, these are json format -- unclear why).
+        The files are json format, but in the original SSS scripts, are not named .json, they are named simply .txt.
 
         Cf. this section from build_coha_corpus.py:
 
@@ -790,51 +779,30 @@ class bert(object):
                             help="Paths to all corpus time slices separated by ';'.")
         """
 
-        # if len(args.path_to_fine_tuned_model) > 0:
-        #     fine_tuned = True
-        # else:
-        #     fine_tuned = False
-
         fine_tuned = True
 
-        # datasets = args.corpus_paths.split(';')
-
-        # if len(args.path_to_fine_tuned_model) > 0:
-        #     state_dict =  torch.load(args.path_to_fine_tuned_model)
-
+        """
         if task == "coha":
             # lang = "English" # commented out now, we are adding explicit parameter
 
             # shifts_dict = get_shifts(args.target_path)
             # shifts_dict = cls._get_mockup_dict_for_extract_query()
+        """
 
-            shifts_dict = cls._make_mockup_dict_from_wordlist(
-                cls._get_wordlist_for_extract_query(path=wordlist_path)
-            )
-            logger.debug(f"{shifts_dict=}")
-
-        # elif task == 'aylien':
-        #     lang = 'English'
-        #     shifts_dict = get_shifts(args.target_path)
-        # elif task == 'durel':
-        #     lang = 'German'
-        #     shifts_dict = get_durel_shifts(args.target_path)
-
-        # if lang == 'English':
-        #     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-        #     if fine_tuned:
-        #         state_dict = torch.load(args.path_to_fine_tuned_model)
-        #         model = BertModel.from_pretrained('bert-base-uncased', state_dict=state_dict, output_hidden_states=True)
-        #     else:
-        #         model = BertModel.from_pretrained('bert_base-uncased', output_hidden_states=True)
+        shifts_dict = cls._make_mockup_dict_from_wordlist(
+            cls._get_wordlist_for_extract_query(path=wordlist_path)
+        )
+        logger.debug(f"{shifts_dict=}")
 
         # https://stackoverflow.com/questions/65882750/please-use-torch-load-with-map-location-torch-devicecpu
         # torch_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        """
         if gpu:
             pass
         else:
             torch_device = torch.device("cpu")
             logger.info(f"{torch_device=}")
+        """
 
         modelForSpecificLanguage = "bert-base-multilingual-cased"
         logger.info(f"{modelForSpecificLanguage=}")
@@ -850,6 +818,8 @@ class bert(object):
         if gpu:
             state_dict = torch.load(pathToFineTunedModel)
         else:
+            torch_device = torch.device("cpu")
+            logger.info(f"{torch_device=}")
             state_dict = torch.load(pathToFineTunedModel, map_location=torch_device)
 
         logger.debug("Now loading state_dict into a model...")
@@ -858,18 +828,14 @@ class bert(object):
         )
         logger.debug("state_dict has been loaded into a model")
 
-        # elif lang == 'German':
-        #     tokenizer = BertTokenizer.from_pretrained('bert-base-german-cased')
-        #     if fine_tuned:
-        #         state_dict = torch.load(args.path_to_fine_tuned_model)
-        #         model = BertModel.from_pretrained('bert-base-german-cased', state_dict=state_dict, output_hidden_states=True)
-        #     else:
-        #         model = BertModel.from_pretrained('bert-base-german-cased', output_hidden_states=True)
-
         if gpu:
             model.cuda()
         model.eval()
 
+        if len(datasets) > 1:
+            logger.warning(
+                "This datasets list has more than one dataset in it, is this function built for that?"
+            )
         for dataset in datasets:
             logger.debug(f"{_file_info_digest(dataset)=}")
 
@@ -899,10 +865,6 @@ class bert(object):
 
         logger.info(f"Output embeddings pickle should now be at: {embeddings_path=}")
         logger.debug(f"{_file_info_digest(embeddings_path)=}")
-
-        logger.debug(
-            f"{filehasher.hash_dir(DEFAULT_DATA_ROOT_DIR, pattern='*')=}"
-        )  # TBD move this to where hashing a dir makes sense
 
     @classmethod
     def filter_dataset_and_extract(
@@ -963,7 +925,7 @@ class bert(object):
         dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
         logger.debug(f"{dataset_json=}")
         embeddings_output_path = (
-            base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
+            base_working_dirpath / "embeddings"  # / f"{slice_label}.pickle"
         )
         logger.debug(f"{embeddings_output_path=}")
         cls.extract(
