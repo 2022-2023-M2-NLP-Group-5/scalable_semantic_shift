@@ -65,6 +65,7 @@ if __name__ == "__main__":
         logger.warning("Did not find `loguru` module, defaulting to `logging`")
 
 DEFAULT_DATA_ROOT_DIR = Path("data/")
+FULL_TEXT_JSON_FILENAME = "full_text_json.txt"
 
 
 class _StreamToLogger:
@@ -379,13 +380,22 @@ class coha(object):
     @staticmethod
     def build_corpus(
         *dirpaths_for_input_slices,
-        data_root_dir=DEFAULT_DATA_ROOT_DIR,
+        # data_root_dir=DEFAULT_DATA_ROOT_DIR,
+        slice_labels_list: list = [],  # TODO add this option (as mandatory)
         output_dir="",
         do_txt: bool = True,
         do_json: bool = True,
     ):
         """Wrapper alternative to simplify the argparse version in the original build_coha_corpus.py."""
         logger.debug(f"{do_txt=}, {do_json=}")
+
+        corpus_slice_labels = (
+            slice_labels_list  # IMPORTANT. TODO collapse names into one variable
+        )
+        if len(corpus_slice_labels) == 0:
+            logger.error(
+                f"You must call this function with a list of corpus slice labels, but {len(corpus_slice_labels)=}"
+            )
 
         # TODO add more file info digest into this fn. Also, display where the output paths are clearly in logs.
 
@@ -399,7 +409,7 @@ class coha(object):
         # First we setup all our paths that we will use, without modifying anything on disk yet...
 
         if output_dir == "":
-            output_dir = Path(data_root_dir) / "outputs" / "corpus"
+            output_dir = DEFAULT_DATA_ROOT_DIR / "outputs" / "corpus"
 
         output_dir = Path(output_dir).resolve()
 
@@ -411,9 +421,9 @@ class coha(object):
         input_folders = dirpaths_for_input_slices
 
         # TODO this is too rigid, make this better (we have made slice labels manual elsewhere)
-        corpus_slice_labels = [
-            str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices
-        ]
+        # corpus_slice_labels = [
+        #     str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices
+        # ]
 
         paths_for_lm_output_train = [
             (output_dir / l / "train.txt") for l in corpus_slice_labels
@@ -423,7 +433,7 @@ class coha(object):
         ]
 
         json_output_files = [
-            (output_dir / l / "full_text.json.txt") for l in corpus_slice_labels
+            (output_dir / l / FULL_TEXT_JSON_FILENAME) for l in corpus_slice_labels
         ]
 
         logger.debug("Working with the following paths...")
@@ -484,7 +494,7 @@ class coha(object):
         cls.download_sample()
         cls.clear()
         cls.extract(*slices)
-        cls.build_corpus(*slice_dirs)
+        cls.build_corpus(*slice_dirs)  # TODO fix for new fn sig
         cls.clear()
 
 
@@ -909,7 +919,11 @@ class bert(object):
 
         filtered_dataset_dirpath = base_working_dirpath / "reduce_corpus"
         filtered_dataset_txt_filepath = filtered_dataset_dirpath / "filtered.txt"
-        dataset_json = filtered_dataset_dirpath / "build_corpus" / "full_text.json.txt"
+
+        build_corpus_output_dir = base_working_dirpath / "build_corpus"
+        dataset_json = (
+            build_corpus_output_dir / f"{slice_label}" / FULL_TEXT_JSON_FILENAME
+        )
 
         base_working_dirpath.mkdir(exist_ok=False, parents=True)
         filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
@@ -918,6 +932,8 @@ class bert(object):
         logger.debug(f"{embeddings_output_path=}")
         logger.debug(f"{filtered_dataset_dirpath=}")
         logger.debug(f"{filtered_dataset_txt_filepath=}")
+
+        logger.info(f"{build_corpus_output_dir=}")
         logger.debug(f"{dataset_json=}")
 
         logger.info("now reducing corpus")
@@ -931,14 +947,14 @@ class bert(object):
         logger.info("now running coha.build_corpus() to build json version")
         coha.build_corpus(
             filtered_dataset_dirpath,
+            slice_labels_list=[slice_label],
             do_txt=False,
             do_json=True,
-            output_dir=base_working_dirpath,
+            output_dir=build_corpus_output_dir,
         )
 
         logger.info("now extracting pickle")
-        dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
-        logger.debug(f"{dataset_json=}")
+        # logger.debug(f"{dataset_json=}")
         embeddings_output_path = (
             base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
         )
@@ -1080,7 +1096,7 @@ class run(object):
         epochs=5,
         batchSize=7,
     ):
-        """NOTE: The default path arguments are just for testing purposes."""
+        """This function is not operational yet. also NOTE: The default path arguments are just for testing purposes."""
 
         logger.debug(f"{_file_info_digest(train)=}")
         logger.debug(f"{_file_info_digest(test)=}")
