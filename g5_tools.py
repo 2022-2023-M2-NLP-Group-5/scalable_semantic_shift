@@ -699,6 +699,7 @@ class bert(object):
     def extract(
         cls,
         slice_label: str,
+        lang: str,  # "English", # or "German" # upper-cased here (some other fns take lowercase)
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset="data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
@@ -710,6 +711,7 @@ class bert(object):
         """
                 Wraps get_embeddings_scalable.py.
                 Extract embeddings from the preprocessed corpus in .txt for corpus.
+                This creates a pickled file containing all contextual embeddings for all target words.
 
                 The original repo's functions are designed for a single monomodel, in which multiple slices/corpuses are present and can be extracted.
 
@@ -717,7 +719,6 @@ class bert(object):
 
         python get_embeddings_scalable.py --corpus_paths pathToPreprocessedCorpusSlicesSeparatedBy';' --corpus_slices nameOfCorpusSlicesSeparatedBy';' --target_path pathToTargetFile --task chooseBetween'coha','durel','aylien' --path_to_fine_tuned_model pathToFineTunedModel --embeddings_path pathToOutputEmbeddingFile
 
-        This creates a pickled file containing all contextual embeddings for all target words.
         """
         logger.info("Working with the following input parameters...")
         logger.info(f"{pathToFineTunedModel=}")
@@ -801,7 +802,8 @@ class bert(object):
         #     state_dict =  torch.load(args.path_to_fine_tuned_model)
 
         if task == "coha":
-            lang = "English"
+            # lang = "English" # commented out now, we are adding explicit parameter
+
             # shifts_dict = get_shifts(args.target_path)
             # shifts_dict = cls._get_mockup_dict_for_extract_query()
 
@@ -944,7 +946,7 @@ class bert(object):
             corpus_filepath=corpus_filepath,  # "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
             target_filepath=wordlist_path,  # "data/wordlists/synonyms/no_mwe/bag.txt",
             output_filepath=filtered_dataset_txt_filepath,  # "data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
-            lang=lang,
+            lang=lang.lower(),
         )
 
         logger.info("now running coha.build_corpus() to build json version")
@@ -960,13 +962,19 @@ class bert(object):
         logger.debug(f"{dataset_json=}")
         cls.extract(
             slice_label=slice_label,
+            lang=lang.capitalize(),
             pathToFineTunedModel=pathToFineTunedModel,
             dataset=dataset_json,
             wordlist_path=wordlist_path,
         )
 
     @classmethod
-    def loop_extract(cls, list_of_slice_model_dataset_tuples: list, wordlist_path):
+    def loop_extract(
+        cls,
+        list_of_slice_model_dataset_tuples: list,
+        wordlist_path,
+        lang: str = "english",
+    ):
         # def loop_extract(cls, model_dataset_pairs_pathlist: list[tuple], *kwargs):
         # '''operate on paths'''
         for slice_label, model_path, dataset_path in list_of_slice_model_dataset_tuples:
@@ -975,6 +983,7 @@ class bert(object):
             )
             cls.extract(
                 slice_label=slice_label,
+                lang=lang.capitalize(),  # extract takes capitalized, reduce_corpus takes lower (difference comes from the original SSS scripts)
                 pathToFineTunedModel=model_path,  # "data/averie_bert_training_c1/pytorch_model.bin",
                 dataset=dataset_path,  # "data/outputs/1910/full_text.json.txt",
                 wordlist_path=wordlist_path,  # "data/semeval2020_ulscd_eng/wordlist.txt",
@@ -1080,6 +1089,7 @@ class run(object):
     @staticmethod
     def train_extract(
         slice_label: str,
+        lang: str = "english",
         train=TESTING_BERT_TRAINTXT_PATH,  # 'data/c2_corpus_out/train.txt',
         test=TESTING_BERT_TESTTXT_PATH,  # 'data/c2_corpus_out/test.txt',
         full_text_json=TESTING_BERT_FULLTEXTJSON_PATH,  # 'data/cohasem_corpus2/full_text.json.txt',
@@ -1130,6 +1140,7 @@ class run(object):
 
         bert.extract(
             slice_label=slice_label,
+            lang=lang.capitalize(),  # extract takes capitalized, reduce_corpus takes lower (difference comes from the original SSS scripts)
             pathToFineTunedModel=str(train_output_dir / "pytorch_model.bin"),
             dataset=full_text_json,
             gpu=True,
