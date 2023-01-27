@@ -221,9 +221,9 @@ def _file_info_digest(filepath):
     digest = _hash_file_maybe(filepath_abs)
     fileinfo = os.stat(filepath_abs)
     results = {
+        "digest": digest,
         "filepath_arg": filepath_arg,
         "filepath_abs": filepath_abs,
-        "digest": digest,
         "fileinfo": fileinfo,
     }
     # logger.trace(results)
@@ -703,7 +703,7 @@ class bert(object):
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset="data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
-        embeddings_path=None,  # tbd change this to empty string
+        embeddings_path="",
         gpu=True,
         batch_size=16,
         max_length=256,
@@ -760,10 +760,11 @@ class bert(object):
         logger.info(f"{datasets=} ; {slices=}")
 
         """# embeddings_path: is path to output the embeddings file"""
-        if embeddings_path is None:
-            stamp = _stamp([pathToFineTunedModel, dataset], dt_format="MM-DD_HH\hmm")
+        if embeddings_path == "":
+            stamp = _stamp([pathToFineTunedModel, dataset])
+            _slice_label = slices[0]
             embeddings_path = (
-                DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slices[0]}.pickle"
+                DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{_slice_label}.pickle"
             )
         embeddings_path = embeddings_path.resolve()
         logger.info(f"We will output embeddings to file: {embeddings_path=}")
@@ -926,11 +927,12 @@ class bert(object):
         base_working_dirpath = (
             DEFAULT_DATA_ROOT_DIR
             # / "AUTOTEST"
-            / "corpus"
-            / "filtered"
+            # / "corpus"
+            # / "filtered"
+            / "unattended_runs"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
-        filtered_dataset_dirpath = base_working_dirpath / "blarg"
+        filtered_dataset_dirpath = base_working_dirpath / "filtered_corpus"
 
         base_working_dirpath.mkdir(exist_ok=False, parents=True)
         filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
@@ -960,12 +962,17 @@ class bert(object):
         logger.info("now extracting pickle")
         dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
         logger.debug(f"{dataset_json=}")
+        embeddings_output_path = (
+            base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
+        )
+        logger.debug(f"{embeddings_output_path=}")
         cls.extract(
             slice_label=slice_label,
             lang=lang.capitalize(),
             pathToFineTunedModel=pathToFineTunedModel,
             dataset=dataset_json,
             wordlist_path=wordlist_path,
+            embeddings_path=embeddings_output_path,
         )
 
     @classmethod
