@@ -740,10 +740,11 @@ class bert(object):
         from get_embeddings_scalable import get_slice_embeddings
 
         task = "coha"
-        datasets = [dataset]
+        # datasets = [dataset]
+        datasets = [Path(p).resolve() for p in datasets]
         slices = [slice_label]
 
-        logger.info(f"{datasets=} ; {slices=}")
+        logger.debug(f"{datasets=} ; {slices=}")
 
         """# embeddings_path: is path to output the embeddings file"""
         """
@@ -808,7 +809,7 @@ class bert(object):
         """
 
         modelForSpecificLanguage = "bert-base-multilingual-cased"
-        logger.info(f"{modelForSpecificLanguage=}")
+        logger.debug(f"{modelForSpecificLanguage=}")
 
         tokenizer = BertTokenizer.from_pretrained(
             modelForSpecificLanguage, do_lower_case=False
@@ -836,14 +837,14 @@ class bert(object):
         model.eval()
 
         if len(datasets) > 1:
-            logger.warning(
+            logger.error(
                 "This datasets list has more than one dataset in it, is this function built for that?"
             )
         for dataset in datasets:
             logger.debug(f"{_file_info_digest(dataset)=}")
 
-        logger.debug("Parameters that we will pass to get_slice_embeddings()...")
         logger.debug(
+            "Parameters that we will pass to get_slice_embeddings()... "
             f"{embeddings_path=}, {datasets=}, {tokenizer=}, (`model` too verbose to log here), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}"
         )
         # logger.debug(f"{model=}")
@@ -851,6 +852,7 @@ class bert(object):
         logger.info("Now running get_slice_embeddings()...")
         embeddings_path.parent.mkdir(exist_ok=True)
         embeddings_path = str(embeddings_path)
+        logger.warning(f"{embeddings_path=}")
         with _redirect_stdout, _redirect_stderr:
             get_slice_embeddings(
                 embeddings_path,
