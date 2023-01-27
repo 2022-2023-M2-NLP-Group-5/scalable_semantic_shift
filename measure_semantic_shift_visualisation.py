@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--define_words_to_interpret', type=str, default='', help='Define a set of words separated by ";" for interpretation if you do not wish to save data for all words.')
     parser.add_argument('--random_state', type=int, default=420, help='Choose a random state for reproducibility of clustering.')
     parser.add_argument('--cluster_size_threshold', type=int, default=7, help='Clusters smaller than a threshold will be merged or deleted.')
-    parser.add_argument('--top_n', type=int, default=3, help='Decide on top n most frequent occcurrences')
+    parser.add_argument('--top_n', type=int, default=1, help='Decide on top n most frequent occcurrences')
     args = parser.parse_args()
     random_state = args.random_state
     threshold = args.cluster_size_threshold
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         count2sents[slice] = c2ss[slice][slice]
 
 
-    if get_additional_info and len(target_words) > 100:
+    if get_additional_info and len(target_words) > 10:
         print('Define a list of words to interpret with less than 100 words or set "get_additional_info" flag to False')
         sys.exit()
 
@@ -147,4 +147,23 @@ if __name__ == '__main__':
                 local_record["distance"] = ";".join(relatives_distances)
                 local_record["sense"] = i+1
                 records.append(local_record)
-
+    pd.DataFrame.from_dict(records).to_csv("csv/{}_{}.csv".format(word,"-".join(corpus_slices)))
+    # Extract the semantic changes between two words
+    if len(target_words==2):
+        pair_distances = dict()
+        for word in target_words:
+            w_embeddings = bert_embeddings[word]
+            element_embeddings = []
+            for slice in corpus_slices:
+                slice_vocab = set(embeddings[slice].keys())
+                try:
+                    slice_vocab.remove(word)
+                except KeyError:
+                    print("{0} is not in the {1} slice.".format(word, slice))
+                    continue
+                local_record = dict()
+                local_record["word"] = word
+                local_record["slice"] = slice
+                senses = extract_frequent_embeddings(w_embeddings, slice, topn=1)
+                element_embeddings.append(senses[0])
+            pair_distances[word] = element_embeddings
