@@ -277,7 +277,8 @@ def _token_id(items_to_hash) -> str:
 
 def _stamp(items_to_hash, dt_format="MM-DD_HH:mm:ss"):
     dt = pendulum.now().format(dt_format)
-    stamp = dt + "_p." + _token_id(items_to_hash)
+    stamp = dt + "_p_" + _token_id(items_to_hash)
+    # NOTE: Cannot have any extra dots (.) in pickle file name/path, or else SSS get_embeddings_scalable.get_slice_embeddings() will split it incorrectly.
     return stamp
 
 
