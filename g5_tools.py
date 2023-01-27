@@ -740,7 +740,7 @@ class bert(object):
         from get_embeddings_scalable import get_slice_embeddings
 
         task = "coha"
-        # datasets = [dataset]
+        datasets = [dataset]
         datasets = [Path(p).resolve() for p in datasets]
         slices = [slice_label]
 
