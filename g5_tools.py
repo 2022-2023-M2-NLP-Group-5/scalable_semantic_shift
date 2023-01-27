@@ -24,22 +24,21 @@ bash
 conda activate ScaleSemShift
 """
 
-import sys
-import os
-from pathlib import Path
-import shutil
-import hashlib
 import contextlib
+import hashlib
+import os
+import shutil
+import sys
 import time
 from collections import namedtuple
+from pathlib import Path
 
-from numpy import mean
-import pandas as pd
-
-import fire
-import sarge
-import pendulum
 import filehash
+import fire
+import pandas as pd
+import pendulum
+import sarge
+from numpy import mean
 
 filehasher = filehash.FileHash()
 
@@ -55,12 +54,10 @@ if __name__ == "__main__":
         logfile = f"g5.{timestamp}.loguru"
         # fmt: off
         logger.add( sys.stderr, backtrace=True, diagnose=True, format=LOGGER_FORMAT )
-        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".log", retention="6 months", format=LOGGER_FORMAT, colorize=True, )
-        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".txt",  retention="6 months", format=LOGGER_FORMAT, colorize=False, )
-        logger.add( "logs/{time:YYYY-MM-DD}/" + logfile + ".json", retention="6 months", format=LOGGER_FORMAT, colorize=False, serialize=True, )
+        logger.add( "logs/{time:YYYY-MM-DD}/{time:HH}h/" + logfile + ".log", retention="6 months", format=LOGGER_FORMAT, colorize=True, )
+        logger.add( "logs/{time:YYYY-MM-DD}/{time:HH}h/" + logfile + ".txt",  retention="6 months", format=LOGGER_FORMAT, colorize=False, )
+        logger.add( "logs/{time:YYYY-MM-DD}/{time:HH}h/" + logfile + ".json", retention="6 months", format=LOGGER_FORMAT, colorize=False, serialize=True, )
         # fmt: on
-        logger.debug(f"Our logs will be named ...{logfile}...")
-        logger.debug(f"{LOGGER_FORMAT=}")
     except ModuleNotFoundError:
         import logging as logger
 
@@ -91,10 +88,20 @@ class _StreamToLogger:
         pass
 
 
-_stream_stdout = _StreamToLogger(level="INFO", prefix="<STDOUT> ")
-_stream_stderr = _StreamToLogger(level="INFO", prefix="<STDERR> ")
+_stream_stdout = _StreamToLogger(level="INFO", prefix="[STDOUT] ")
+_stream_stderr = _StreamToLogger(level="INFO", prefix="[STDERR] ")
 _redirect_stdout = contextlib.redirect_stdout(_stream_stdout)
 _redirect_stderr = contextlib.redirect_stderr(_stream_stderr)
+
+
+def _write_list_to_file(input_list, outfile_path=sys.stdout):
+    """Write a list to a file, newline-separated, each element of list on its own line."""
+    outfile_path = Path(outfile_path).resolve()
+    with open(outfile_path, "w", encoding="utf8") as f:
+        f.writelines(
+            "\n".join(input_list)
+        )  # writelines() does not append its own newlines
+    # logger.debug(f"file is now at {outfile_path=}")
 
 
 def _print_log(c_err: sarge.Capture, c_out: sarge.Capture, cmd_label: str):
@@ -244,9 +251,11 @@ def _download_file_maybe(url: str, out_file_path=None):
 
 def setup_punkt():
     """Punkt tokenizer is used by the COHA preprocessing code (build_corpus...)"""
-    import nltk
+    with _redirect_stderr, _redirect_stdout:
+        # stderr and stdout capture doesnt seem to work with nltk
+        import nltk
 
-    nltk.download("punkt")
+        nltk.download("punkt")
 
 
 def _token_id(items_to_hash) -> str:
@@ -266,7 +275,7 @@ def _token_id(items_to_hash) -> str:
 
 def _stamp(items_to_hash, dt_format="MM-DD_HH:mm:ss"):
     dt = pendulum.now().format(dt_format)
-    stamp = dt + "_<" + _token_id(items_to_hash) + ">"
+    stamp = dt + "_p." + _token_id(items_to_hash)
     return stamp
 
 
@@ -313,7 +322,7 @@ class coha(object):
         try:
             exdir.mkdir(exist_ok=False, parents=True)
         except:
-            logger.warning(f"Aborting because {exdir=} ...seems to already exist")
+            logger.error(f"Aborting because {exdir=} ...seems to already exist")
             sys.exit(1)
         command = sarge.shell_format("unzip -q -d {} {} ", exdir, zipfile_path)
         _run_cmd(command, cmd_label="unzip")
@@ -383,42 +392,36 @@ class coha(object):
             setup_punkt()
 
         # this import needs punkt already downloaded in order to succeed
-        from build_coha_corpus import (
-            build_train_test,
-            build_data_sets,
-        )
+        from build_coha_corpus import build_data_sets, build_train_test
 
         # First we setup all our paths that we will use, without modifying anything on disk yet...
 
-        # data_root_dir = Path(data_root_dir)
-
         if output_dir == "":
-            output_dir = data_root_dir / Path("outputs")
+            output_dir = Path(data_root_dir) / "outputs" / "corpus"
+
+        output_dir = Path(output_dir).resolve()
 
         dirpaths_for_input_slices = [
             Path(p).resolve() for p in dirpaths_for_input_slices
         ]
 
-        # NOTE TBD: input_folders and dirpaths_for_input_slices are pretty much
-        # the same, we can probably change this to collapse these into one
-        # variable
-        # input_folders = [Path(dirpath) for dirpath in dirpaths_for_input_slices]
+        # TODO collapse this into a single variable
         input_folders = dirpaths_for_input_slices
 
+        # TODO this is too rigid, make this better (we have made slice labels manual elsewhere)
         corpus_slice_labels = [
             str(Path(dirpath).name) for dirpath in dirpaths_for_input_slices
         ]
 
         paths_for_lm_output_train = [
-            output_dir / Path(l) / Path("train.txt") for l in corpus_slice_labels
+            (output_dir / l / "train.txt") for l in corpus_slice_labels
         ]
         paths_for_lm_output_test = [
-            output_dir / Path(l) / Path("test.txt") for l in corpus_slice_labels
+            (output_dir / l / "test.txt") for l in corpus_slice_labels
         ]
 
         json_output_files = [
-            output_dir / Path(l) / Path("full_text.json.txt")
-            for l in corpus_slice_labels
+            (output_dir / l / "full_text.json.txt") for l in corpus_slice_labels
         ]
 
         logger.debug("Working with the following paths...")
@@ -429,14 +432,14 @@ class coha(object):
         logger.debug(f"{paths_for_lm_output_test=}")
         logger.debug(f"{json_output_files=}")
 
-        logger.warning(f"{output_dir=}")
+        logger.info(f"{output_dir=}")
 
-        for d in dirpaths_for_input_slices:
-            logger.debug(f"{filehasher.hash_dir(d, pattern='*')=}")
+        # for d in dirpaths_for_input_slices:
+        #     logger.debug(f"{filehasher.hash_dir(d, pattern='*')=}")
 
         # Now we start doing actions that will modify things on disk...
 
-        logger.info("Ok, making changes to filesystem...")
+        logger.info("Ok, making changes to files...")
         output_dir.mkdir(exist_ok=True)  # create outputs dir if it does not exist yet
 
         # Json generation runs much faster than txt, so we will do it first
@@ -727,7 +730,8 @@ class bert(object):
         logger.debug(f"{_file_info_digest(wordlist_path)=}")
 
         import torch
-        from transformers import BertTokenizer, BertModel
+        from transformers import BertModel, BertTokenizer
+
         from get_embeddings_scalable import get_slice_embeddings
 
         # batch_size = 16
@@ -870,7 +874,7 @@ class bert(object):
         logger.debug(
             f"{embeddings_path=}, {datasets=}, {tokenizer=}, (`model` too verbose to log here), {batch_size=}, {max_length=}, {lang=}, {shifts_dict=}, {task=}, {slices=}, {gpu=}"
         )
-        logger.debug(f"{model=}")
+        # logger.debug(f"{model=}")
 
         logger.info("Now running get_slice_embeddings()...")
         embeddings_path.parent.mkdir(exist_ok=True)
@@ -924,16 +928,16 @@ class bert(object):
             / "filtered"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
-        filtered_dataset_dirpath = base_working_dirpath / "filtered"
+        filtered_dataset_dirpath = base_working_dirpath / "blarg"
 
         base_working_dirpath.mkdir(exist_ok=False, parents=True)
         filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
 
         filtered_dataset_txt_filepath = filtered_dataset_dirpath / "reduced.txt"
 
-        logger.warning(f"{base_working_dirpath=}")
-        logger.warning(f"{filtered_dataset_dirpath=}")
-        logger.warning(f"{filtered_dataset_txt_filepath=}")
+        logger.debug(f"{base_working_dirpath=}")
+        logger.debug(f"{filtered_dataset_dirpath=}")
+        logger.debug(f"{filtered_dataset_txt_filepath=}")
 
         logger.info("now reducing corpus")
         reduce_corpus(
@@ -943,7 +947,7 @@ class bert(object):
             lang=lang,
         )
 
-        logger.info("now running coha.build_corpus()")
+        logger.info("now running coha.build_corpus() to build json version")
         coha.build_corpus(
             filtered_dataset_dirpath,
             do_txt=False,
@@ -1136,8 +1140,9 @@ class run(object):
         logger.debug(f"{filehasher.hash_dir(unattended_run_dirpath, pattern='*')=}")
 
 
-from nltk.corpus import wordnet
 import itertools
+
+from nltk.corpus import wordnet
 
 # TBD make automatic
 # nltk.download('wordnet')
@@ -1147,7 +1152,7 @@ import itertools
 class wn(object):
     """WordNet stuff
 
-    currently on english synonyms implemented; TODO implement german synonyms"""
+    currently only english synonyms implemented; TODO implement german synonyms"""
 
     def __init__(self, drop_mwe=True):
         self.drop_mwe = drop_mwe
@@ -1180,22 +1185,6 @@ class wn(object):
         synonyms = [el.replace("_", " ") for el in synonyms]
         return sorted(synonyms)
 
-    def _syn_method2(self, word):
-        """Get synoyms for a word. NOTE: use diff conda env, based on
-        environment.wn.yml and requirements.wn.txt, with python 3.9
-
-        This fn does NOT work in python 3.8"""
-        # synonyms fn is available in wordnet with python 3.9, but not 3.8
-        syn = wordnet.synonyms(word)
-        # this returned a multidimensional list (for different meanings of the
-        # word), now we need to flatten it
-        syn = list(itertools.chain(*syn))
-        synonyms = sorted(set(syn))
-        if self.drop_mwe:
-            synonyms = [el for el in synonyms if "_" not in el]
-        synonyms = [el.replace("_", " ") for el in synonyms]
-        return sorted(synonyms)
-
     def syn(self, *args, **kwargs):
         return self._syn_method1(*args, **kwargs)
 
@@ -1203,6 +1192,7 @@ class wn(object):
         logger.debug(f"{_file_info_digest(targets_file)=}")
         wordlist = bert._read_wordlist_from_file(targets_file)
         outfiles_dir = Path(outfiles_dir)
+        logger.debug(f"{self.drop_mwe=}")
         for w in wordlist:
             syn_list = self._syn_method1(w)
             outfile_path = (outfiles_dir / f"{w}.txt").resolve()
@@ -1210,27 +1200,11 @@ class wn(object):
             _write_list_to_file(syn_list, outfile_path)
 
 
-def _write_list_to_file(input_list, outfile_path):
-    outfile_path = Path(outfile_path).resolve()
-    with open(outfile_path, "w", encoding="utf8") as f:
-        f.writelines(
-            "\n".join(input_list)
-        )  # writelines() does not append its own newlines
-    # logger.debug(f"file is now at {outfile_path=}")
-
-
-@logger.catch
-def _main():
+def _do_initial_logging():
+    logger.debug(f"Our logs will be named ...{logfile}...")
+    logger.debug(f"{LOGGER_FORMAT=}")
     logger.debug(f"CLI invocation argument list: {sys.argv=}")
     logger.debug(f"{sys.flags=}")
-    # with contextlib.redirect_stdout(_stream_stdout), contextlib.redirect_stderr(
-    #     _stream_stderr
-    # ):
-    #     print("NOTE: Standard output (stdout) is sent to added handlers, like so.")
-    #     print(
-    #         "NOTE: Standard error  (stderr) is sent to added handlers, like so.",
-    #         file=sys.stderr,
-    #     )
     GIT_CMDS = [
         "git rev-parse HEAD",
         "git show --no-patch --oneline",
@@ -1238,6 +1212,11 @@ def _main():
     ]
     for cmd in GIT_CMDS:
         _run_cmd(cmd, cmd_label=cmd, extra_wait_for_secs=0)
+
+
+@logger.catch
+def _main():
+    _do_initial_logging()
     fire.Fire()
     logger.debug("end of script")
 
