@@ -174,7 +174,8 @@ def reduce_corpus(
     target_filepath="data/wordlists/synonyms/no_mwe/bag.txt",
     output_filepath="data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
     lang="english",
-    keep_size: float = 1.0,  # float indicating percentage of corpus to keep, e.g. 0.5 = keep 50%
+    keep_size=80_000,  # number of lines to keep (max).
+    # in older version, keep_size was float indicating percentage of corpus to keep, e.g. 0.5 = keep 50%
 ):
     """Wraps reduce_corpus.py.
 
@@ -906,7 +907,7 @@ class bert(object):
         # filter_dataset: bool = True,
         # batch_size=16,
         # max_length=256,
-        keep_size: float = 1.0,
+        keep_size: int = 80_000,
     ):
         logger.info(f"{corpus_filepath=}")
         logger.info(f"{lang=}")
