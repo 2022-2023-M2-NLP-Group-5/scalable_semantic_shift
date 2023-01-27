@@ -174,8 +174,12 @@ def reduce_corpus(
     target_filepath="data/wordlists/synonyms/no_mwe/bag.txt",
     output_filepath="data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
     lang="english",
+    keep_size: float = 1.0,  # float indicating percentage of corpus to keep, e.g. 0.5 = keep 50%
 ):
-    """
+    """Wraps reduce_corpus.py.
+
+    Example standalone CLI command:
+
     python reduce_corpus.py --corpus_filepath 'data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt' --target_filepath 'data/wordlists/synonyms/no_mwe/bag.txt' --output_filepath 'data/syn/c1/c1_EN_reduced.txt' --lang english"""
     cmd = (
         "python reduce_corpus.py  "
@@ -183,9 +187,10 @@ def reduce_corpus(
         "--target_filepath {}  "
         "--output_filepath {}  "
         "--lang {}  "
+        "--keep_size {}  "
     )
     cmd = sarge.shell_format(
-        cmd, corpus_filepath, target_filepath, output_filepath, lang
+        cmd, corpus_filepath, target_filepath, output_filepath, lang, keep_size
     )
     _run_cmd(cmd, cmd_label=cmd.split(" ")[1])
 
@@ -901,6 +906,7 @@ class bert(object):
         # filter_dataset: bool = True,
         # batch_size=16,
         # max_length=256,
+        keep_size: float = 1.0,
     ):
         logger.info(f"{corpus_filepath=}")
         logger.info(f"{lang=}")
@@ -942,6 +948,7 @@ class bert(object):
             target_filepath=wordlist_path,  # "data/wordlists/synonyms/no_mwe/bag.txt",
             output_filepath=filtered_dataset_txt_filepath,  # "data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
             lang=lang.lower(),
+            keep_size=keep_size,
         )
 
         logger.info("now running coha.build_corpus() to build json version")
