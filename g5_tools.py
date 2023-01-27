@@ -160,7 +160,7 @@ def _run_cmd(
         _print_log(c_err, c_out, cmd_label)
 
     logger.debug(
-        f"Command subprocess has exited: {cmd_label=}, {p.poll_all()[-1]=}, {p.returncodes=}"
+        f"Command subprocess has exited: {cmd_label=}, {( p.poll_all()[-1] )=}, {p.returncodes=}"
     )
     for ret in p.returncodes:
         if ret != 0:
@@ -739,7 +739,7 @@ class bert(object):
 
         """
         logger.info("Working with the following input parameters...")
-        logger.warning(f"{embeddings_path=}")
+        logger.info(f"{embeddings_path=}")
         logger.info(f"{slice_label=}")
         logger.info(f"{lang=}")
         logger.info(f"{pathToFineTunedModel=}")
@@ -874,7 +874,7 @@ class bert(object):
         logger.info("Now running get_slice_embeddings()...")
         embeddings_path.parent.mkdir(exist_ok=True)
         embeddings_path = str(embeddings_path)
-        logger.warning(f"{embeddings_path=}")
+        logger.info(f"{embeddings_path=}")
         with _redirect_stdout, _redirect_stderr:
             get_slice_embeddings(
                 embeddings_path,
@@ -1227,7 +1227,7 @@ def _do_initial_logging():
     GIT_CMDS = [
         "git rev-parse HEAD",
         "git show --no-patch --oneline",
-        "git status --porcelain=v2 --branch -z",
+        "git status --porcelain --branch -z", # on saarland git version is too old to know about porcelain=v2
     ]
     for cmd in GIT_CMDS:
         _run_cmd(cmd, cmd_label=cmd, extra_wait_for_secs=0)
