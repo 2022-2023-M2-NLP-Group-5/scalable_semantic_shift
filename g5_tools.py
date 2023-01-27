@@ -702,10 +702,10 @@ class bert(object):
         cls,
         slice_label: str,
         lang: str,  # "English", # or "German" # upper-cased here (some other fns take lowercase)
+        embeddings_path,  # ="",
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
         dataset="data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
-        embeddings_path="",
         gpu=True,
         batch_size=16,
         max_length=256,
@@ -723,7 +723,7 @@ class bert(object):
 
         """
         logger.info("Working with the following input parameters...")
-
+        logger.warning(f"{embeddings_path=}")
         logger.info(f"{slice_label=}")
         logger.info(f"{lang=}")
         logger.info(f"{pathToFineTunedModel=}")
@@ -746,6 +746,7 @@ class bert(object):
         logger.info(f"{datasets=} ; {slices=}")
 
         """# embeddings_path: is path to output the embeddings file"""
+        """
         if embeddings_path == "":
             stamp = _stamp(
                 [pathToFineTunedModel, dataset]
@@ -754,6 +755,8 @@ class bert(object):
             embeddings_path = (
                 DEFAULT_DATA_ROOT_DIR / "embeddings" / stamp / f"{slice_label}.pickle"
             )
+        """
+
         embeddings_path = Path(embeddings_path).resolve()
         logger.info(f"We will output embeddings to file: {embeddings_path=}")
 
@@ -785,10 +788,10 @@ class bert(object):
         if task == "coha":
             # lang = "English" # commented out now, we are adding explicit parameter
 
-            # shifts_dict = get_shifts(args.target_path)
-            # shifts_dict = cls._get_mockup_dict_for_extract_query()
         """
 
+        # shifts_dict = get_shifts(args.target_path)
+        # shifts_dict = cls._get_mockup_dict_for_extract_query()
         shifts_dict = cls._make_mockup_dict_from_wordlist(
             cls._get_wordlist_for_extract_query(path=wordlist_path)
         )
@@ -796,7 +799,7 @@ class bert(object):
 
         # https://stackoverflow.com/questions/65882750/please-use-torch-load-with-map-location-torch-devicecpu
         # torch_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        """
+        """ # TODO moved this elsewhere, can delete soon
         if gpu:
             pass
         else:
@@ -888,18 +891,22 @@ class bert(object):
 
         base_working_dirpath = (
             DEFAULT_DATA_ROOT_DIR
-            # / "AUTOTEST"
-            # / "corpus"
-            # / "filtered"
             / "unattended_runs"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
         filtered_dataset_dirpath = base_working_dirpath / "filtered_corpus"
 
-        base_working_dirpath.mkdir(exist_ok=False, parents=True)
-        filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
+        embeddings_output_path = (
+            base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
+        )
+        logger.debug(f"{embeddings_output_path=}")
 
         filtered_dataset_txt_filepath = filtered_dataset_dirpath / "reduced.txt"
+        dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
+        logger.debug(f"{dataset_json=}")
+
+        base_working_dirpath.mkdir(exist_ok=False, parents=True)
+        filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
 
         logger.debug(f"{base_working_dirpath=}")
         logger.debug(f"{filtered_dataset_dirpath=}")
@@ -925,7 +932,7 @@ class bert(object):
         dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
         logger.debug(f"{dataset_json=}")
         embeddings_output_path = (
-            base_working_dirpath / "embeddings"  # / f"{slice_label}.pickle"
+            base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
         )
         logger.debug(f"{embeddings_output_path=}")
         cls.extract(
@@ -934,7 +941,7 @@ class bert(object):
             pathToFineTunedModel=pathToFineTunedModel,
             dataset=dataset_json,
             wordlist_path=wordlist_path,
-            embeddings_path=embeddings_output_path,
+            embeddings_path=str(embeddings_output_path),
         )
 
     @classmethod
