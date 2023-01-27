@@ -40,7 +40,6 @@ import pendulum
 import sarge
 import torch
 from numpy import mean
-from transformers import BertModel, BertTokenizer
 
 filehasher = filehash.FileHash()
 
@@ -740,6 +739,12 @@ class bert(object):
 
         from get_embeddings_scalable import get_slice_embeddings
 
+        # with _redirect_stderr, _redirect_stdout:
+        from transformers import (
+            BertModel,
+            BertTokenizer,
+        )  # NOTE: this forks its own process as soon as it is imported
+
         task = "coha"
         datasets = [dataset]
         datasets = [Path(p).resolve() for p in datasets]
@@ -897,23 +902,23 @@ class bert(object):
             / "unattended_runs"
             / _stamp([corpus_filepath, lang, pathToFineTunedModel, wordlist_path])
         )
-        filtered_dataset_dirpath = base_working_dirpath / "filtered_corpus"
 
         embeddings_output_path = (
             base_working_dirpath / "embeddings" / f"{slice_label}.pickle"
         )
-        logger.debug(f"{embeddings_output_path=}")
 
-        filtered_dataset_txt_filepath = filtered_dataset_dirpath / "reduced.txt"
-        dataset_json = filtered_dataset_dirpath / "full_text.json.txt"
-        logger.debug(f"{dataset_json=}")
+        filtered_dataset_dirpath = base_working_dirpath / "reduce_corpus"
+        filtered_dataset_txt_filepath = filtered_dataset_dirpath / "filtered.txt"
+        dataset_json = filtered_dataset_dirpath / "build_corpus" / "full_text.json.txt"
 
         base_working_dirpath.mkdir(exist_ok=False, parents=True)
         filtered_dataset_dirpath.mkdir(exist_ok=False, parents=True)
 
         logger.debug(f"{base_working_dirpath=}")
+        logger.debug(f"{embeddings_output_path=}")
         logger.debug(f"{filtered_dataset_dirpath=}")
         logger.debug(f"{filtered_dataset_txt_filepath=}")
+        logger.debug(f"{dataset_json=}")
 
         logger.info("now reducing corpus")
         reduce_corpus(
@@ -1191,9 +1196,9 @@ class wn(object):
 
 
 def _do_initial_logging():
-    logger.debug(f"Our logs will be named ...{logfile}...")
+    logger.info(f"Our logs will be named ...{logfile}...")
     logger.debug(f"{LOGGER_FORMAT=}")
-    logger.debug(f"CLI invocation argument list: {sys.argv=}")
+    logger.info(f"CLI invocation argument list: {sys.argv=}")
     logger.debug(f"{sys.flags=}")
     GIT_CMDS = [
         "git rev-parse HEAD",
@@ -1206,9 +1211,10 @@ def _do_initial_logging():
 
 @logger.catch
 def _main():
-    _do_initial_logging()
-    fire.Fire()
-    logger.debug("end of script")
+    with _redirect_stderr, _redirect_stdout:
+        _do_initial_logging()
+        fire.Fire()
+        logger.debug("end of script")
 
 
 if __name__ == "__main__":
