@@ -269,20 +269,35 @@ def _hash_file_maybe(
         logger.debug(f"not hashing full file because filesize exceeds {max_filesize=}")
         # TBD implement partial digest of first XX bytes of large file
         partial_digest = None
-    return {"full_digest": full_digest, "partial_digest": partial_digest}
+    Digest = namedtuple("Digest", ["full", "partial"])
+    return Digest(full_digest, partial_digest)
+    # return {"full_digest": full_digest, "partial_digest": partial_digest}
 
 
-def _file_info_digest(filepath):
+def file_info_digest(filepath):
+    """Generates a summary of file info, for logging and for future comparison.
+    Includes checksum of file contents, as well as relative and absolute path, and
+    file size, mode time etc (among other os.stat() info).
+
+    To generate a digest to compare to the logs, use this command:
+
+    python g5_tools.py file_info_digest 'path/to/file' __repr__
+
+    """
     filepath_arg = filepath
     filepath_abs = str(Path(filepath).resolve())
     digest = _hash_file_maybe(filepath_abs)
     fileinfo = os.stat(filepath_abs)
-    results = {
-        "digest": digest,
-        "filepath_arg": filepath_arg,
-        "filepath_abs": filepath_abs,
-        "fileinfo": fileinfo,
-    }
+    Results = namedtuple(
+        "FileInfoDigest",
+        [
+            "digest",
+            "filepath_arg",
+            "filepath_abs",
+            "fileinfo",
+        ],
+    )
+    results = Results(digest, filepath_arg, filepath_abs, fileinfo)
     # logger.trace(results)
     return results
 
@@ -305,7 +320,7 @@ def _download_file_maybe(url: str, out_file_path=None):
         # logger.info(f'Running {command=}')
         _run_cmd(command, cmd_label="wget")
 
-    logger.debug(f"{_file_info_digest(out_file_path)=}")
+    logger.debug(f"{file_info_digest(out_file_path)=}")
 
 
 def setup_punkt():
@@ -835,9 +850,9 @@ class bert(object):
 
         logger.debug(f"{batch_size=}, {max_length=}")
 
-        logger.debug(f"{_file_info_digest(pathToFineTunedModel)=}")
-        logger.debug(f"{_file_info_digest(dataset)=}")
-        logger.debug(f"{_file_info_digest(wordlist_path)=}")
+        logger.debug(f"{file_info_digest(pathToFineTunedModel)=}")
+        logger.debug(f"{file_info_digest(dataset)=}")
+        logger.debug(f"{file_info_digest(wordlist_path)=}")
 
         # with _redirect_stderr, _redirect_stdout:
         from transformers import (  # NOTE: this forks its own process as soon as it is imported
@@ -924,7 +939,7 @@ class bert(object):
         )
 
         logger.debug(
-            f"We will load state_dict from this file: {_file_info_digest(pathToFineTunedModel)=}"
+            f"We will load state_dict from this file: {file_info_digest(pathToFineTunedModel)=}"
         )
         logger.debug("Loading state_dict...")
         if gpu:
@@ -949,7 +964,7 @@ class bert(object):
                 "This datasets list has more than one dataset in it, is this function built for that?"
             )
         for dataset in datasets:
-            logger.debug(f"{_file_info_digest(dataset)=}")
+            logger.debug(f"{file_info_digest(dataset)=}")
 
         logger.debug(
             "Parameters that we will pass to get_slice_embeddings()... "
@@ -977,7 +992,7 @@ class bert(object):
             )
 
         logger.info(f"Output embeddings pickle should now be at: {embeddings_path=}")
-        logger.debug(f"{_file_info_digest(embeddings_path)=}")
+        logger.debug(f"{file_info_digest(embeddings_path)=}")
 
     @classmethod
     def filter_dataset_and_extract(
@@ -1253,9 +1268,9 @@ class run(object):
         require GPU and can take some time). Also NOTE: The default path
         arguments are just for testing purposes."""
 
-        logger.debug(f"{_file_info_digest(train)=}")
-        logger.debug(f"{_file_info_digest(test)=}")
-        logger.debug(f"{_file_info_digest(full_text_json)=}")
+        logger.debug(f"{file_info_digest(train)=}")
+        logger.debug(f"{file_info_digest(test)=}")
+        logger.debug(f"{file_info_digest(full_text_json)=}")
 
         unattended_run_dirpath = (
             DEFAULT_DATA_ROOT_DIR / "unattended_runs" / str(pendulum.now())
@@ -1359,7 +1374,7 @@ class wn(object):
 
         The synonym files generated are also wordlist files of their own, and
         can be used as such for querying a pickle extract."""
-        logger.debug(f"{_file_info_digest(targets_file)=}")
+        logger.debug(f"{file_info_digest(targets_file)=}")
         wordlist = words._read_wordlist_from_file(targets_file)
         outfiles_dir = Path(outfiles_dir)
         logger.debug(f"{self.drop_mwe=}")
