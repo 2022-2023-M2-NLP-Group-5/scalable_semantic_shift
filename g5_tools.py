@@ -17,7 +17,7 @@ git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
 git checkout experimental # or git checkout devel # depending on context
 
-time mamba env create -f environment.yml  # 4 mins (mostly for scikit)
+time mamba env create -f environment.yml  # 5 mins (mostly for scikit)
 
 bash
 
@@ -25,11 +25,18 @@ conda activate ScaleSemShift
 
 python g5_tools.py --help
 
-# for testing purposes:
+# for testing purposes (note that these are just testing example commands, for
+# real usage you would want to specify all arguments rather than running with
+# hardcoded defaults):
+
 python g5_tools.py bert prep_coha '1910'
-python g5_tools.py bert train
-# ...
+
+python g5_tools.py bert train --batchSize 4 --out data/outputs/bert_training_TEST_1/
+
+...
+
 python g5_tools.py bert filter_dataset_and_extract 'TESTING'
+
 """
 
 import contextlib
@@ -154,11 +161,8 @@ def _write_list_to_file(input_list, outfile_path=sys.stdout):
 
 
 def _print_log(c_err: sarge.Capture, c_out: sarge.Capture, cmd_label: str):
-    # TODO maybe convert these bytestrings to unicode before displaying. (This
-    # doesn't affect a lot of cases, but does effect for example the progress
-    # bars displayed by hugging face model downloader.)
-    stderr_msg = c_err.readline().rstrip()
-    stdout_msg = c_out.readline().rstrip()
+    stderr_msg = c_err.readline().rstrip().decode("utf-8")
+    stdout_msg = c_out.readline().rstrip().decode("utf-8")
     if len(stderr_msg) > 0:
         StdErr = namedtuple("StdErr", ["l", "m"])
         log_line = StdErr(l=cmd_label, m=stderr_msg)

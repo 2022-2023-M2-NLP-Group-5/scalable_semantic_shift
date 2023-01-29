@@ -8,7 +8,7 @@ transformers==3.0.1
 tokenizers==0.8.0rc4
 tensorboardX==2.1
 spacy==2.3.0
-POT
+POT # "import ot"
 nltk
 lemmagen3
 matplotlib
@@ -22,3 +22,6 @@ pendulum
 filehash
 
 # ipdb
+
+apex # added based on pipreqs output
+ptvsd # added based on pipreqs output
