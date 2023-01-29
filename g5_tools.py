@@ -17,6 +17,8 @@ git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
 git checkout experimental # or git checkout devel # depending on context
 
+head -n 40 g5_tools.py
+
 time mamba env create -f environment.yml  # 5 mins (mostly for scikit)
 
 bash
@@ -88,23 +90,6 @@ if __name__ == "__main__":
 DEFAULT_DATA_ROOT_DIR = Path("data/")
 FULL_TEXT_JSON_FILENAME = "full_text_json.txt"
 
-# Strings for use in testing
-
-TESTING_BERT_TRAINTXT_PATH = "data/outputs/corpus/1910/train.txt"
-TESTING_BERT_TESTTXT_PATH = "data/outputs/corpus/1910/test.txt"
-TESTING_BERT_FULLTEXTJSON_PATH = "data/outputs/corpus/1910/" + FULL_TEXT_JSON_FILENAME
-
-TESTING_ORIGINAL_CORPUS_TXT_FILEPATH = (
-    "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt"
-)
-TESTING_FINE_TUNED_MODEL_PATH = "data/averie_bert_training_c1/pytorch_model.bin"
-_TESTING_WORDLIST_PATHS_LIST = [
-    "data/semeval2020_ulscd_eng/wordlist.txt",
-    "data/semeval2020_ulscd_ger/targets.txt",
-    "data/wordlists/synonyms/mwe_dropped/lass.txt",
-]
-TESTING_WORDLIST_PATH = _TESTING_WORDLIST_PATHS_LIST[2]
-
 # might as well hardcode this since the list is so short
 # fmt: off
 SEMEVAL_WORDLIST = [ "attack", "bag", "ball", "bit", "chairman", "circle",
@@ -114,6 +99,27 @@ SEMEVAL_WORDLIST = [ "attack", "bag", "ball", "bit", "chairman", "circle",
                      "risk", "savage", "stab", "stroke", "thump", "tip", "tree", "twist",
                      "word", ]
 # fmt: on
+
+# Strings for use in testing
+
+TESTING_BERT_TRAINTXT_PATH = "data/outputs/corpus/1910/train.txt"
+TESTING_BERT_TESTTXT_PATH = "data/outputs/corpus/1910/test.txt"
+TESTING_BERT_FULLTEXTJSON_PATH = "data/outputs/corpus/1910/" + FULL_TEXT_JSON_FILENAME
+
+TESTING_ORIGINAL_CORPUS_TXT_FILEPATH = (
+    "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt"
+)
+
+# TESTING_FINE_TUNED_MODEL_PATH = "data/averie_bert_training_c1/pytorch_model.bin"
+TESTING_FINE_TUNED_MODEL_PATH = "data/outputs/bert_training_TEST_1/pytorch_model.bin"
+
+_TESTING_WORDLIST_PATHS_LIST = [
+    "data/synonym_targets.txt",
+    "data/semeval2020_ulscd_eng/wordlist.txt",
+    "data/semeval2020_ulscd_ger/targets.txt",
+    "data/wordlists/synonyms/mwe_dropped/lass.txt",
+]
+TESTING_WORDLIST_PATH = _TESTING_WORDLIST_PATHS_LIST[0]
 
 
 class _StreamToLogger:
