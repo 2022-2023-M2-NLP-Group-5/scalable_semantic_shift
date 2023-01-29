@@ -17,7 +17,7 @@ git clone https://github.com/2022-2023-M2-NLP-Group-5/scalable_semantic_shift/
 cd scalable_semantic_shift/
 git checkout experimental # or git checkout devel # depending on context
 
-head -n 40 g5_tools.py
+head -n 70 g5_tools.py
 
 time mamba env create -f environment.yml  # 5 mins (mostly for scikit)
 
@@ -36,6 +36,15 @@ python g5_tools.py bert prep_coha '1910'
 python g5_tools.py bert train --batchSize 4 --out data/outputs/bert_training_TEST_1/
 
 ...
+
+cd data/
+
+# wget https://www2.ims.uni-stuttgart.de/data/sem-eval-ulscd/semeval2020_ulscd_ger.zip
+wget https://www2.ims.uni-stuttgart.de/data/sem-eval-ulscd/semeval2020_ulscd_eng.zip
+unzip semeval2020_ulscd_eng.zip
+gunzip semeval2020_ulscd_eng/corpus1/token/ccoha1.txt.gz
+
+cd ..
 
 python g5_tools.py bert filter_dataset_and_extract 'TESTING'
 
@@ -106,9 +115,11 @@ TESTING_BERT_TRAINTXT_PATH = "data/outputs/corpus/1910/train.txt"
 TESTING_BERT_TESTTXT_PATH = "data/outputs/corpus/1910/test.txt"
 TESTING_BERT_FULLTEXTJSON_PATH = "data/outputs/corpus/1910/" + FULL_TEXT_JSON_FILENAME
 
-TESTING_ORIGINAL_CORPUS_TXT_FILEPATH = (
-    "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt"
-)
+
+TESTING_ORIGINAL_CORPUS_TXT_FILEPATHS_LIST = [
+    "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
+]
+TESTING_ORIGINAL_CORPUS_TXT_FILEPATH = TESTING_ORIGINAL_CORPUS_TXT_FILEPATHS_LIST[0]
 
 # TESTING_FINE_TUNED_MODEL_PATH = "data/averie_bert_training_c1/pytorch_model.bin"
 TESTING_FINE_TUNED_MODEL_PATH = "data/outputs/bert_training_TEST_1/pytorch_model.bin"
@@ -120,6 +131,8 @@ _TESTING_WORDLIST_PATHS_LIST = [
     "data/wordlists/synonyms/mwe_dropped/lass.txt",
 ]
 TESTING_WORDLIST_PATH = _TESTING_WORDLIST_PATHS_LIST[0]
+
+TESTING_REDUCE_CORPUS_OUTPUT_FILEPATH = "data/syn/c1_AUTOTEST/c1_EN_reduced.txt"
 
 
 class _StreamToLogger:
@@ -232,9 +245,9 @@ def _run_cmd(
 
 
 def reduce_corpus(
-    corpus_filepath="data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
-    target_filepath="data/wordlists/synonyms/no_mwe/bag.txt",
-    output_filepath="data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
+    corpus_filepath=TESTING_ORIGINAL_CORPUS_TXT_FILEPATH,  # "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt",
+    target_filepath=TESTING_WORDLIST_PATH,  # "data/wordlists/synonyms/no_mwe/bag.txt",
+    output_filepath="",  # "data/syn/c1_AUTOTEST/c1_EN_reduced.txt",
     lang="english",
     keep_size=80_000,  # number of lines to keep (max).
     # in older version, keep_size was float indicating percentage of corpus to keep, e.g. 0.5 = keep 50%
