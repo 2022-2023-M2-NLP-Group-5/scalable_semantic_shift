@@ -83,9 +83,9 @@ FULL_TEXT_JSON_FILENAME = "full_text_json.txt"
 
 # Strings for use in testing
 
-TESTING_BERT_TRAINTXT_PATH = "data/outputs/1910/train.txt"
-TESTING_BERT_TESTTXT_PATH = "data/outputs/1910/test.txt"
-TESTING_BERT_FULLTEXTJSON_PATH = "data/outputs/1910/" + FULL_TEXT_JSON_FILENAME
+TESTING_BERT_TRAINTXT_PATH = "data/outputs/corpus/1910/train.txt"
+TESTING_BERT_TESTTXT_PATH = "data/outputs/corpus/1910/test.txt"
+TESTING_BERT_FULLTEXTJSON_PATH = "data/outputs/corpus/1910/" + FULL_TEXT_JSON_FILENAME
 
 TESTING_ORIGINAL_CORPUS_TXT_FILEPATH = (
     "data/semeval2020_ulscd_eng/corpus1/token/ccoha1.txt"
@@ -154,6 +154,9 @@ def _write_list_to_file(input_list, outfile_path=sys.stdout):
 
 
 def _print_log(c_err: sarge.Capture, c_out: sarge.Capture, cmd_label: str):
+    # TODO maybe convert these bytestrings to unicode before displaying. (This
+    # doesn't affect a lot of cases, but does effect for example the progress
+    # bars displayed by hugging face model downloader.)
     stderr_msg = c_err.readline().rstrip()
     stdout_msg = c_out.readline().rstrip()
     if len(stderr_msg) > 0:
@@ -827,7 +830,7 @@ class bert(object):
         lang: str,  # "English", # or "German" # upper-cased here (some other fns take lowercase)
         embeddings_path,  # ="",
         pathToFineTunedModel="data/averie_bert_training_c1/pytorch_model.bin",  # "data/RESULTS_train_bert_coha/1910/pytorch_model.bin",
-        dataset="data/outputs/1910/full_text.json.txt",
+        dataset=TESTING_BERT_FULLTEXTJSON_PATH,  # "data/outputs/1910/full_text.json.txt",
         wordlist_path="data/semeval2020_ulscd_eng/wordlist.txt",  # "data/semeval2020_ulscd_ger/targets.txt",
         gpu=True,
         batch_size=16,
