@@ -30,10 +30,10 @@ We recommend using [conda-forge/miniforge with mamba](https://github.com/conda-f
 1. Install conda.
 2. Create the environement with `.yml` file:
     ```bash
-    conda create --name OpenSemShift -f environment.yml
+    conda env create -f environment.yml
     ```
 
-Any command mentioned further in this file will assume that you have activated the Anaconda environment using `conda activate OpenSemShift`.
+Any command mentioned further in this file will assume that you have activated the Anaconda environment using `conda activate ScaleSemShift`.
 
 #### Pip setup
 If the environment was not created with the ```.yml``` file, follow the following steps to setup the project with Pip.
@@ -98,7 +98,4 @@ python evaluate.py --task 'semeval' --gold_standard_path PathToSemEvalGraded.txt
 ```
 - ```results_path``` should be the output of the previous command, eg. `PathToTheFolderToSaveResults/word_ranking_results_METHOD.csv`
 - ```corpus_slices``` should be the same as above
-
-
-
 
