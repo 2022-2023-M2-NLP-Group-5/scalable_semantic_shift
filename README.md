@@ -58,9 +58,9 @@ wget https://www2.ims.uni-stuttgart.de/data/sem-eval-ulscd/semeval2020_ulscd_ger
 
 ## Usage instructions
 ### Basic usage
-To run this project using the existing models, run the following after replacing `[file to process.txt]` by the name of your file:
+To get an overview of the features provided by these tools, use:
 ```bash
-python main.py [file to process.txt]
+python g5_tools.py --help
 ```
 
 ### Reproduce the experiments mentioned in the report
