@@ -88,9 +88,14 @@ python g5_tools.py bert filter_dataset_and_extract --slice_label NameofCorpusTim
 
 After extracting embeddings from two time slices, measure semantic shift across two ```.pickle``` files (embeddings files extracted from models of two time slices):
 ```bash
-python measure_semantic_shift_merged.py --method WD or JSD -corpus_slices CorpusSliceNamesSeparatedBy ";" --results_dir_path PathToTheFolderToSaveResults --embeddings_path PathToPickleFiles 
+python measure_semantic_shift_merged.py --method WD or JSD --corpus_slices CorpusSliceNamesSeparatedBy ";" --results_dir_path PathToTheFolderToSaveResults --embeddings_path PathToPickleFiles 
 ```
 - this outputs `PathToTheFolderToSaveResults/word_ranking_results_METHOD.csv`
+- NOTE: Before running `measure_semantic_shift_merged.py`, you will need to move
+  the pickle files from the locations where they were generated, into a
+  directory together. The measurement script expects a single directory with
+  several pickle files, each named uniquely and with the names matching the
+  labels specified in `--corpus_slices`.
 
 Evaluate semantic shift results with SemEval test data:
 ```bash
